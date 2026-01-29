@@ -60,10 +60,11 @@ type MultiPortConfig struct {
 
 // ManagementConfig controls the monitoring HTTP endpoint.
 type ManagementConfig struct {
-	Enabled     *bool  `yaml:"enabled"`
-	Listen      string `yaml:"listen"`
-	ProbeTarget string `yaml:"probe_target"`
-	Password    string `yaml:"password"` // WebUI 访问密码，为空则不需要密码
+	Enabled      *bool  `yaml:"enabled"`
+	Listen       string `yaml:"listen"`
+	ProbeTarget  string `yaml:"probe_target"`
+	IPInfoSource string `yaml:"ip_info_source"` // IP 检测源：ping0 / ippure
+	Password     string `yaml:"password"`       // WebUI 访问密码，为空则不需要密码
 }
 
 // SubscriptionRefreshConfig controls subscription auto-refresh and reload settings.
@@ -165,6 +166,11 @@ func (c *Config) normalize() error {
 	if c.Management.ProbeTarget == "" {
 		c.Management.ProbeTarget = "www.apple.com:80"
 	}
+	if strings.TrimSpace(c.Management.IPInfoSource) == "" {
+		c.Management.IPInfoSource = "ping0"
+	} else {
+		c.Management.IPInfoSource = strings.ToLower(strings.TrimSpace(c.Management.IPInfoSource))
+	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
 		c.Management.Enabled = &defaultEnabled
@@ -206,40 +212,67 @@ func (c *Config) normalize() error {
 
 	// Load nodes from subscriptions (highest priority - writes to nodes.txt)
 	if len(c.Subscriptions) > 0 {
-		var subNodes []NodeConfig
-		subTimeout := c.SubscriptionRefresh.Timeout
-		for _, subURL := range c.Subscriptions {
-			nodes, err := loadNodesFromSubscription(subURL, subTimeout)
-			if err != nil {
-				log.Printf("⚠️ Failed to load subscription %q: %v (skipping)", subURL, err)
-				continue
-			}
-			log.Printf("✅ Loaded %d nodes from subscription", len(nodes))
-			subNodes = append(subNodes, nodes...)
-		}
-		// Mark subscription nodes and write to nodes.txt
-		for idx := range subNodes {
-			subNodes[idx].Source = NodeSourceSubscription
-		}
-		if len(subNodes) > 0 {
-			// Determine nodes.txt path
+		if c.SubscriptionRefresh.Enabled {
+			// Async subscription refresh: try cached nodes.txt first, defer network fetch to subscription manager
 			nodesFilePath := c.NodesFile
 			if nodesFilePath == "" {
 				nodesFilePath = filepath.Join(filepath.Dir(c.filePath), "nodes.txt")
 				c.NodesFile = nodesFilePath
 			}
-			// Write subscription nodes to nodes.txt
-			if err := writeNodesToFile(nodesFilePath, subNodes); err != nil {
-				log.Printf("⚠️ Failed to write nodes to %q: %v", nodesFilePath, err)
+			if _, err := os.Stat(nodesFilePath); err == nil {
+				fileNodes, err := loadNodesFromFile(nodesFilePath)
+				if err != nil {
+					log.Printf("⚠️ Failed to load cached nodes from %q: %v", nodesFilePath, err)
+				} else {
+					for idx := range fileNodes {
+						fileNodes[idx].Source = NodeSourceSubscription
+					}
+					c.Nodes = append(c.Nodes, fileNodes...)
+					log.Printf("✅ Loaded %d cached subscription nodes from %s", len(fileNodes), nodesFilePath)
+				}
 			} else {
-				log.Printf("✅ Written %d subscription nodes to %s", len(subNodes), nodesFilePath)
+				log.Printf("ℹ️ No cached nodes found, subscription refresh will run in background")
 			}
+		} else {
+			var subNodes []NodeConfig
+			subTimeout := c.SubscriptionRefresh.Timeout
+			for _, subURL := range c.Subscriptions {
+				nodes, err := loadNodesFromSubscription(subURL, subTimeout)
+				if err != nil {
+					log.Printf("⚠️ Failed to load subscription %q: %v (skipping)", subURL, err)
+					continue
+				}
+				log.Printf("✅ Loaded %d nodes from subscription", len(nodes))
+				subNodes = append(subNodes, nodes...)
+			}
+			// Mark subscription nodes and write to nodes.txt
+			for idx := range subNodes {
+				subNodes[idx].Source = NodeSourceSubscription
+			}
+			if len(subNodes) > 0 {
+				// Determine nodes.txt path
+				nodesFilePath := c.NodesFile
+				if nodesFilePath == "" {
+					nodesFilePath = filepath.Join(filepath.Dir(c.filePath), "nodes.txt")
+					c.NodesFile = nodesFilePath
+				}
+				// Write subscription nodes to nodes.txt
+				if err := writeNodesToFile(nodesFilePath, subNodes); err != nil {
+					log.Printf("⚠️ Failed to write nodes to %q: %v", nodesFilePath, err)
+				} else {
+					log.Printf("✅ Written %d subscription nodes to %s", len(subNodes), nodesFilePath)
+				}
+			}
+			c.Nodes = append(c.Nodes, subNodes...)
 		}
-		c.Nodes = append(c.Nodes, subNodes...)
 	}
 
 	if len(c.Nodes) == 0 {
-		return errors.New("config.nodes cannot be empty (configure nodes in config or use nodes_file)")
+		if len(c.Subscriptions) > 0 && c.SubscriptionRefresh.Enabled {
+			log.Printf("⚠️ No nodes loaded yet; waiting for subscription refresh")
+		} else {
+			return errors.New("config.nodes cannot be empty (configure nodes in config or use nodes_file)")
+		}
 	}
 	portCursor := c.MultiPort.BasePort
 	for idx := range c.Nodes {
@@ -374,6 +407,11 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 	}
 	if c.Management.ProbeTarget == "" {
 		c.Management.ProbeTarget = "www.apple.com:80"
+	}
+	if strings.TrimSpace(c.Management.IPInfoSource) == "" {
+		c.Management.IPInfoSource = "ping0"
+	} else {
+		c.Management.IPInfoSource = strings.ToLower(strings.TrimSpace(c.Management.IPInfoSource))
 	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
@@ -574,6 +612,9 @@ func parseNodesFromContent(content string) ([]NodeConfig, error) {
 
 		// Check if it's a valid proxy URI
 		if isProxyURI(line) {
+			if invalid, _ := IsInvalidNode("", line); invalid {
+				continue
+			}
 			nodes = append(nodes, NodeConfig{
 				URI: line,
 			})
@@ -674,6 +715,9 @@ func parseClashYAML(content string) ([]NodeConfig, error) {
 	for _, proxy := range clash.Proxies {
 		uri := convertClashProxyToURI(proxy)
 		if uri != "" {
+			if invalid, _ := IsInvalidNode(proxy.Name, uri); invalid {
+				continue
+			}
 			nodes = append(nodes, NodeConfig{
 				Name: proxy.Name,
 				URI:  uri,

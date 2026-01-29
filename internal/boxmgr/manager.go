@@ -102,10 +102,34 @@ func (m *Manager) Start(ctx context.Context) error {
 		m.mu.Unlock()
 		return errors.New("sing-box already running")
 	}
-	m.applyConfigSettings(m.cfg)
-	m.baseCtx = ctx
 	cfg := m.cfg
 	m.mu.Unlock()
+
+	return m.startWithConfig(ctx, cfg)
+}
+
+func (m *Manager) startWithConfig(ctx context.Context, cfg *config.Config) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := m.ensureMonitor(ctx); err != nil {
+		return err
+	}
+	if cfg == nil {
+		return errors.New("config is nil")
+	}
+
+	if len(cfg.Nodes) == 0 {
+		m.mu.Lock()
+		m.cfg = cfg
+		m.baseCtx = ctx
+		m.mu.Unlock()
+		m.logger.Warnf("no nodes loaded yet; monitor server started, waiting for subscription refresh")
+		return nil
+	}
+
+	m.applyConfigSettings(cfg)
+	m.baseCtx = ctx
 
 	// Try to start, with automatic port conflict resolution
 	var instance *box.Box
@@ -133,6 +157,7 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	m.mu.Lock()
 	m.currentBox = instance
+	m.cfg = cfg
 	m.mu.Unlock()
 
 	// Start periodic health check after nodes are registered
@@ -496,7 +521,7 @@ func (m *Manager) ListConfigNodes(ctx context.Context) ([]config.NodeConfig, err
 	if m.cfg == nil {
 		return nil, errConfigUnavailable
 	}
-	return cloneNodes(m.cfg.Nodes), nil
+	return dedupeNodes(m.cfg.Nodes), nil
 }
 
 // CreateNode adds a new node to the config and saves it.
@@ -637,6 +662,14 @@ func (m *Manager) ReloadWithPortMap(newCfg *config.Config, portMap map[string]ui
 		}
 	}
 
+	m.mu.RLock()
+	started := m.currentBox != nil
+	ctx := m.baseCtx
+	m.mu.RUnlock()
+	if !started {
+		return m.startWithConfig(ctx, newCfg)
+	}
+
 	return m.Reload(newCfg)
 }
 
@@ -724,6 +757,28 @@ func cloneNodes(nodes []config.NodeConfig) []config.NodeConfig {
 	}
 	out := make([]config.NodeConfig, len(nodes))
 	copy(out, nodes)
+	return out
+}
+
+func dedupeNodes(nodes []config.NodeConfig) []config.NodeConfig {
+	if len(nodes) == 0 {
+		return []config.NodeConfig{}
+	}
+	out := make([]config.NodeConfig, 0, len(nodes))
+	seen := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		key := strings.TrimSpace(node.URI)
+		if key == "" {
+			key = strings.TrimSpace(node.Name)
+		}
+		if key != "" {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+		}
+		out = append(out, node)
+	}
 	return out
 }
 
@@ -817,6 +872,14 @@ func (m *Manager) prepareNodeLocked(node config.NodeConfig, currentName string) 
 		}
 	}
 
+	if conflictName, ok := m.uriConflictLocked(node.URI, currentName); ok {
+		return config.NodeConfig{}, fmt.Errorf("%w: 节点 URI 已存在 (%s)", monitor.ErrNodeConflict, conflictName)
+	}
+
+	if invalid, keyword := config.IsInvalidNode(node.Name, node.URI); invalid {
+		return config.NodeConfig{}, fmt.Errorf("%w: 节点包含无效关键词 %q", monitor.ErrInvalidNode, keyword)
+	}
+
 	// Handle multi-port mode specifics
 	if m.cfg.Mode == "multi-port" {
 		if node.Port == 0 {
@@ -831,4 +894,20 @@ func (m *Manager) prepareNodeLocked(node config.NodeConfig, currentName string) 
 	}
 
 	return node, nil
+}
+
+func (m *Manager) uriConflictLocked(uri string, currentName string) (string, bool) {
+	uri = strings.TrimSpace(uri)
+	if uri == "" {
+		return "", false
+	}
+	for _, node := range m.cfg.Nodes {
+		if strings.TrimSpace(node.URI) != uri {
+			continue
+		}
+		if currentName == "" || node.Name != currentName {
+			return node.Name, true
+		}
+	}
+	return "", false
 }

@@ -41,6 +41,7 @@ type Options struct {
 	FailureThreshold  int
 	BlacklistDuration time.Duration
 	Metadata          map[string]MemberMeta
+	IPInfoSource      string
 }
 
 // MemberMeta carries optional descriptive information for monitoring UI.
@@ -73,6 +74,8 @@ type poolOutbound struct {
 	mode           string
 	members        []*memberState
 	mu             sync.Mutex
+	scamCacheMu    sync.Mutex
+	scamCache      map[string]*scamScoreCache
 	rrCounter      atomic.Uint32
 	rng            *rand.Rand
 	rngMu          sync.Mutex // protects rng for random mode
@@ -100,6 +103,7 @@ func newPool(ctx context.Context, _ adapter.Router, logger log.ContextLogger, ta
 		mode:    normalized.Mode,
 		rng:     rand.New(rand.NewSource(time.Now().UnixNano())),
 		monitor: monitorMgr,
+		scamCache: make(map[string]*scamScoreCache),
 		candidatesPool: sync.Pool{
 			New: func() any {
 				return make([]*memberState, 0, memberCount)
@@ -154,6 +158,10 @@ func normalizeOptions(options Options) Options {
 	if options.Metadata == nil {
 		options.Metadata = make(map[string]MemberMeta)
 	}
+	if strings.TrimSpace(options.IPInfoSource) == "" {
+		options.IPInfoSource = "ping0"
+	}
+	options.IPInfoSource = strings.ToLower(options.IPInfoSource)
 	switch strings.ToLower(options.Mode) {
 	case modeRandom:
 		options.Mode = modeRandom
@@ -302,6 +310,7 @@ func (p *poolOutbound) probeAllMembersOnStartup() {
 			member.entry.RecordSuccessWithLatency(latency)
 			member.entry.MarkInitialCheckDone(true)
 		}
+		p.maybeRefreshIPInfo(member)
 
 		cancel()
 	}
@@ -540,6 +549,7 @@ func (p *poolOutbound) makeProbeFunc(member *memberState) func(ctx context.Conte
 		if member.entry != nil {
 			member.entry.RecordSuccessWithLatency(duration)
 		}
+		p.maybeRefreshIPInfo(member)
 		return duration, nil
 	}
 }
@@ -601,6 +611,7 @@ func (p *poolOutbound) makeProbeByTagFunc(tag string) func(ctx context.Context) 
 		if member.entry != nil {
 			member.entry.RecordSuccessWithLatency(duration)
 		}
+		p.maybeRefreshIPInfo(member)
 		return duration, nil
 	}
 }

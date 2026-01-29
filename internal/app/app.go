@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"easy_proxies/internal/boxmgr"
@@ -23,6 +24,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		proxyPassword = cfg.MultiPort.Password
 	}
 
+	checkDir := "checker"
+	if cfg != nil {
+		if cfgPath := cfg.FilePath(); cfgPath != "" {
+			checkDir = filepath.Join(filepath.Dir(cfgPath), "checker")
+		}
+	}
+
 	monitorCfg := monitor.Config{
 		Enabled:       cfg.ManagementEnabled(),
 		Listen:        cfg.Management.Listen,
@@ -31,6 +39,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		ProxyUsername: proxyUsername,
 		ProxyPassword: proxyPassword,
 		ExternalIP:    cfg.ExternalIP,
+		CheckResultDir: checkDir,
 	}
 
 	// Create and start BoxManager

@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,13 +47,17 @@ type SubscriptionRefresher interface {
 
 // SubscriptionStatus represents subscription refresh status.
 type SubscriptionStatus struct {
-	LastRefresh   time.Time `json:"last_refresh"`
-	NextRefresh   time.Time `json:"next_refresh"`
-	NodeCount     int       `json:"node_count"`
-	LastError     string    `json:"last_error,omitempty"`
-	RefreshCount  int       `json:"refresh_count"`
-	IsRefreshing  bool      `json:"is_refreshing"`
-	NodesModified bool      `json:"nodes_modified"` // True if nodes.txt was modified since last refresh
+	LastRefresh      time.Time `json:"last_refresh"`
+	NextRefresh      time.Time `json:"next_refresh"`
+	NodeCount        int       `json:"node_count"`
+	LastError        string    `json:"last_error,omitempty"`
+	RefreshCount     int       `json:"refresh_count"`
+	IsRefreshing     bool      `json:"is_refreshing"`
+	NodesModified    bool      `json:"nodes_modified"` // True if nodes.txt was modified since last refresh
+	ProgressTotal    int       `json:"progress_total"`
+	ProgressCurrent  int       `json:"progress_current"`
+	ProgressNodes    int       `json:"progress_nodes"`
+	ProgressMessage  string    `json:"progress_message,omitempty"`
 }
 
 // Server exposes HTTP endpoints for monitoring.
@@ -92,6 +98,7 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/nodes/probe-all", s.withAuth(s.handleProbeAll))
 	mux.HandleFunc("/api/nodes/", s.withAuth(s.handleNodeAction))
 	mux.HandleFunc("/api/debug", s.withAuth(s.handleDebug))
+	mux.HandleFunc("/api/export/filter", s.withAuth(s.handleExportFilter))
 	mux.HandleFunc("/api/export", s.withAuth(s.handleExport))
 	mux.HandleFunc("/api/subscription/status", s.withAuth(s.handleSubscriptionStatus))
 	mux.HandleFunc("/api/subscription/refresh", s.withAuth(s.handleSubscriptionRefresh))
@@ -127,6 +134,24 @@ func (s *Server) SetConfig(cfg *config.Config) {
 		s.cfg.ProbeTarget = cfg.Management.ProbeTarget
 		s.cfg.SkipCertVerify = cfg.SkipCertVerify
 	}
+}
+
+func (s *Server) proxyAuth() (string, string) {
+	s.cfgMu.RLock()
+	cfgSrc := s.cfgSrc
+	cfg := s.cfg
+	s.cfgMu.RUnlock()
+	if cfgSrc == nil {
+		return cfg.ProxyUsername, cfg.ProxyPassword
+	}
+	mode := strings.TrimSpace(strings.ToLower(cfgSrc.Mode))
+	if mode == "multi_port" {
+		mode = "multi-port"
+	}
+	if mode == "multi-port" || mode == "hybrid" {
+		return cfgSrc.MultiPort.Username, cfgSrc.MultiPort.Password
+	}
+	return cfgSrc.Listener.Username, cfgSrc.Listener.Password
 }
 
 // getSettings returns current dynamic settings (thread-safe).
@@ -203,8 +228,8 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	// 只返回初始检查通过的可用节点
-	payload := map[string]any{"nodes": s.mgr.SnapshotFiltered(true)}
+	// 返回所有节点（包含未通过初始检查的节点）
+	payload := map[string]any{"nodes": s.mgr.SnapshotFiltered(false)}
 	writeJSON(w, payload)
 }
 
@@ -230,6 +255,8 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 			"last_latency_ms":    snap.LastLatencyMs,
 			"last_success":       snap.LastSuccess,
 			"last_failure":       snap.LastFailure,
+			"last_probe_at":      snap.LastProbeAt,
+			"last_probe_cached":  snap.LastProbeCached,
 			"last_error":         snap.LastError,
 			"blacklisted":        snap.Blacklisted,
 			"timeline":           snap.Timeline,
@@ -244,6 +271,7 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		"total_calls":   totalCalls,
 		"total_success": totalSuccess,
 		"success_rate":  successRate,
+		"probe_logs":    s.mgr.ProbeLogs(),
 	})
 }
 
@@ -326,61 +354,76 @@ func (s *Server) handleProbeAll(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "data: %s\n\n", fmt.Sprintf(`{"type":"start","total":%d}`, total))
 	flusher.Flush()
 
-	// Probe all nodes concurrently
-	type probeResult struct {
-		tag     string
-		name    string
-		latency int64
-		err     string
+	intervalMs, hasInterval := parseIntParam(r.URL.Query().Get("interval_ms"))
+	if !hasInterval || intervalMs <= 0 {
+		intervalMs = 200
 	}
-	results := make(chan probeResult, total)
-
-	// Launch all probes concurrently
-	for _, snap := range snapshots {
-		go func(snap Snapshot, mgr *Manager) {
-			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-			defer cancel()
-			latency, err := mgr.Probe(ctx, snap.Tag)
-			if err != nil {
-				results <- probeResult{tag: snap.Tag, name: snap.Name, latency: -1, err: err.Error()}
-			} else {
-				results <- probeResult{tag: snap.Tag, name: snap.Name, latency: latency.Milliseconds(), err: ""}
-			}
-		}(snap, s.mgr)
+	maxIntervalMs, hasMaxInterval := parseIntParam(r.URL.Query().Get("max_interval_ms"))
+	if !hasMaxInterval || maxIntervalMs <= 0 {
+		maxIntervalMs = 2000
+	}
+	stepMs, hasStep := parseIntParam(r.URL.Query().Get("interval_step_ms"))
+	if !hasStep || stepMs <= 0 {
+		stepMs = 100
 	}
 
-	// Collect results as they come in with overall timeout
+	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+
+	// Probe all nodes sequentially with adaptive interval
 	successCount := 0
 	failedCount := 0
-	timeout := time.After(30 * time.Second) // Overall timeout for all probes
 
 	for i := 0; i < total; i++ {
 		select {
-		case result := <-results:
-			if result.err != "" {
-				failedCount++
-			} else {
-				successCount++
-			}
-			current := successCount + failedCount
-			progress := float64(current) / float64(total) * 100
-			eventData := fmt.Sprintf(`{"type":"progress","tag":"%s","name":"%s","latency":%d,"error":"%s","current":%d,"total":%d,"progress":%.1f}`,
-				result.tag, result.name, result.latency, result.err, current, total, progress)
-			fmt.Fprintf(w, "data: %s\n\n", eventData)
-			flusher.Flush()
-		case <-timeout:
-			// Overall timeout reached, report remaining nodes as timed out
-			remaining := total - (successCount + failedCount)
-			for j := 0; j < remaining; j++ {
-				failedCount++
-				current := successCount + failedCount
-				progress := float64(current) / float64(total) * 100
-				eventData := fmt.Sprintf(`{"type":"progress","tag":"unknown","name":"超时节点","latency":-1,"error":"overall timeout","current":%d,"total":%d,"progress":%.1f}`,
-					current, total, progress)
-				fmt.Fprintf(w, "data: %s\n\n", eventData)
-				flusher.Flush()
-			}
+		case <-r.Context().Done():
 			goto complete
+		default:
+		}
+
+		snap := snapshots[i]
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		latency, err := s.mgr.Probe(ctx, snap.Tag)
+		cancel()
+
+		latencyMs := latency.Milliseconds()
+		if latencyMs == 0 && latency > 0 {
+			latencyMs = 1
+		}
+
+		errMsg := ""
+		if err != nil {
+			failedCount++
+			errMsg = err.Error()
+		} else {
+			successCount++
+			intervalMs += stepMs
+			if intervalMs > maxIntervalMs {
+				intervalMs = maxIntervalMs
+			}
+		}
+
+		current := successCount + failedCount
+		progress := float64(current) / float64(total) * 100
+		eventData := fmt.Sprintf(`{"type":"progress","tag":"%s","name":"%s","latency":%d,"error":"%s","current":%d,"total":%d,"progress":%.1f}`,
+			snap.Tag, snap.Name, latencyMs, errMsg, current, total, progress)
+		fmt.Fprintf(w, "data: %s\n\n", eventData)
+		flusher.Flush()
+
+		if current >= total {
+			break
+		}
+
+		var delay time.Duration
+		if err != nil {
+			delay = time.Duration(rng.Intn(2000)+1000) * time.Millisecond
+		} else {
+			delay = time.Duration(intervalMs) * time.Millisecond
+		}
+
+		select {
+		case <-r.Context().Done():
+			goto complete
+		case <-time.After(delay):
 		}
 	}
 
@@ -488,6 +531,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	snapshots := s.mgr.SnapshotFiltered(true)
 	var lines []string
 
+	proxyUser, proxyPass := s.proxyAuth()
 	for _, snap := range snapshots {
 		// 只导出有监听地址和端口的节点
 		if snap.ListenAddress == "" || snap.Port == 0 {
@@ -504,9 +548,9 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var proxyURI string
-		if s.cfg.ProxyUsername != "" && s.cfg.ProxyPassword != "" {
+		if proxyUser != "" && proxyPass != "" {
 			proxyURI = fmt.Sprintf("http://%s:%s@%s:%d",
-				s.cfg.ProxyUsername, s.cfg.ProxyPassword,
+				proxyUser, proxyPass,
 				listenAddr, snap.Port)
 		} else {
 			proxyURI = fmt.Sprintf("http://%s:%d", listenAddr, snap.Port)
@@ -520,15 +564,224 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(strings.Join(lines, "\n")))
 }
 
+// handleExportFilter returns filtered proxy URIs in JSON format.
+// Query params:
+// - shared_min / shared_max: numeric shared user bounds
+// - country: matches country/location (case-insensitive contains)
+// - ip_src: matches ip_src (e.g. 原生/广播)
+// - ip_attr: matches ip_attr (e.g. 住宅/机房)
+// - fraud_max: max fraud score (percent)
+// - pure_max: max pure score (percent)
+// - latency_max: max latency (ms)
+func (s *Server) handleExportFilter(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := r.URL.Query()
+	sharedMin, hasSharedMin := parseIntParam(query.Get("shared_min"))
+	sharedMax, hasSharedMax := parseIntParam(query.Get("shared_max"))
+	fraudMax, hasFraudMax := parseFloatParam(query.Get("fraud_max"))
+	pureMax, hasPureMax := parseFloatParam(query.Get("pure_max"))
+	latencyMax, hasLatencyMax := parseIntParam(query.Get("latency_max"))
+	country := strings.TrimSpace(query.Get("country"))
+	ipSrc := strings.TrimSpace(query.Get("ip_src"))
+	ipAttr := strings.TrimSpace(query.Get("ip_attr"))
+
+	// 只导出初始检查通过的可用节点
+	snapshots := s.mgr.SnapshotFiltered(true)
+	var proxies []string
+
+	proxyUser, proxyPass := s.proxyAuth()
+	extIP, _, _ := s.getSettings()
+
+	for _, snap := range snapshots {
+		if snap.ListenAddress == "" || snap.Port == 0 {
+			continue
+		}
+
+		if !matchIPInfoFilters(snap.IPInfo, country, ipSrc, ipAttr, sharedMin, sharedMax, hasSharedMin, hasSharedMax) {
+			continue
+		}
+		if hasLatencyMax {
+			if snap.LastLatencyMs < 0 || int(snap.LastLatencyMs) > latencyMax {
+				continue
+			}
+		}
+		if !matchScoreFilters(snap.IPInfo, pureMax, fraudMax, hasPureMax, hasFraudMax) {
+			continue
+		}
+
+		listenAddr := snap.ListenAddress
+		if listenAddr == "0.0.0.0" || listenAddr == "::" {
+			if extIP != "" {
+				listenAddr = extIP
+			}
+		}
+
+		var proxyURI string
+		if proxyUser != "" && proxyPass != "" {
+			proxyURI = fmt.Sprintf("http://%s:%s@%s:%d",
+				proxyUser, proxyPass,
+				listenAddr, snap.Port)
+		} else {
+			proxyURI = fmt.Sprintf("http://%s:%d", listenAddr, snap.Port)
+		}
+		proxies = append(proxies, proxyURI)
+	}
+
+	writeJSON(w, map[string]any{
+		"count":   len(proxies),
+		"proxies": proxies,
+	})
+}
+
+func parseIntParam(value string) (int, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func parseFloatParam(value string) (float64, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func parseSharedCount(value string) (int, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	nums := make([]int, 0, 2)
+	cur := 0
+	inNum := false
+	for _, r := range value {
+		if r >= '0' && r <= '9' {
+			cur = cur*10 + int(r-'0')
+			inNum = true
+			continue
+		}
+		if inNum {
+			nums = append(nums, cur)
+			cur = 0
+			inNum = false
+		}
+	}
+	if inNum {
+		nums = append(nums, cur)
+	}
+	if len(nums) == 0 {
+		return 0, false
+	}
+	upper := nums[len(nums)-1]
+	if strings.Contains(value, "+") {
+		upper++
+	}
+	return upper, true
+}
+
+func parsePercentValue(value string) (float64, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	value = strings.TrimSuffix(value, "%")
+	n, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+func matchIPInfoFilters(info *IPInfo, country, ipSrc, ipAttr string, sharedMin, sharedMax int, hasSharedMin, hasSharedMax bool) bool {
+	hasFilter := country != "" || ipSrc != "" || ipAttr != "" || hasSharedMin || hasSharedMax
+	if info == nil {
+		return !hasFilter
+	}
+
+	if country != "" {
+		if !containsFold(info.Country, country) && !containsFold(info.Location, country) {
+			return false
+		}
+	}
+	if ipSrc != "" && !containsFold(info.IPSrc, ipSrc) {
+		return false
+	}
+	if ipAttr != "" && !containsFold(info.IPAttr, ipAttr) {
+		return false
+	}
+
+	if hasSharedMin || hasSharedMax {
+		sharedCount, ok := parseSharedCount(info.SharedUsers)
+		if !ok {
+			return false
+		}
+		if hasSharedMin && sharedCount < sharedMin {
+			return false
+		}
+		if hasSharedMax && sharedCount > sharedMax {
+			return false
+		}
+	}
+
+	return true
+}
+
+func matchScoreFilters(info *IPInfo, pureMax, fraudMax float64, hasPureMax, hasFraudMax bool) bool {
+	if !hasPureMax && !hasFraudMax {
+		return true
+	}
+	if info == nil {
+		return false
+	}
+	if hasPureMax {
+		pureVal, ok := parsePercentValue(info.PureScore)
+		if !ok || pureVal > pureMax {
+			return false
+		}
+	}
+	if hasFraudMax {
+		fraudVal, ok := parsePercentValue(info.FraudScore)
+		if !ok || fraudVal > fraudMax {
+			return false
+		}
+	}
+	return true
+}
+
+func containsFold(haystack, needle string) bool {
+	if needle == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))
+}
+
 // handleSettings handles GET/PUT for dynamic settings (external_ip, probe_target, skip_cert_verify).
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		extIP, probeTarget, skipCertVerify := s.getSettings()
+		proxyUser, proxyPass := s.proxyAuth()
 		writeJSON(w, map[string]any{
 			"external_ip":      extIP,
 			"probe_target":     probeTarget,
 			"skip_cert_verify": skipCertVerify,
+			"proxy_username":   proxyUser,
+			"proxy_password":   proxyPass,
 		})
 	case http.MethodPut:
 		var req struct {
@@ -580,13 +833,18 @@ func (s *Server) handleSubscriptionStatus(w http.ResponseWriter, r *http.Request
 
 	status := s.subRefresher.Status()
 	writeJSON(w, map[string]any{
-		"enabled":       true,
-		"last_refresh":  status.LastRefresh,
-		"next_refresh":  status.NextRefresh,
-		"node_count":    status.NodeCount,
-		"last_error":    status.LastError,
-		"refresh_count": status.RefreshCount,
-		"is_refreshing": status.IsRefreshing,
+		"enabled":          true,
+		"last_refresh":     status.LastRefresh,
+		"next_refresh":     status.NextRefresh,
+		"node_count":       status.NodeCount,
+		"last_error":       status.LastError,
+		"refresh_count":    status.RefreshCount,
+		"is_refreshing":    status.IsRefreshing,
+		"nodes_modified":   status.NodesModified,
+		"progress_total":   status.ProgressTotal,
+		"progress_current": status.ProgressCurrent,
+		"progress_nodes":   status.ProgressNodes,
+		"progress_message": status.ProgressMessage,
 	})
 }
 

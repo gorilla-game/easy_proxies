@@ -21,6 +21,7 @@
       --text-primary: #1d1d1f;
       --text-secondary: #86868b;
       --bg-elevated: rgba(255, 255, 255, 0.8);
+      --bg-solid: #ffffff;
       --bg-base: #f5f5f7;
       --border: rgba(0, 0, 0, 0.06);
       --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -39,7 +40,8 @@
     }
 
     .app {
-      max-width: 1200px;
+      width: 95vw;
+      max-width: 1800px;
       margin: 0 auto;
       padding: 40px 20px;
     }
@@ -194,7 +196,7 @@
     /* Nodes Grid */
     .nodes-grid {
       display: grid;
-      gap: 16px;
+      gap: 10px;
     }
 
     .node-card {
@@ -202,7 +204,7 @@
       backdrop-filter: saturate(180%) blur(20px);
       border: 1px solid var(--border);
       border-radius: 18px;
-      padding: 28px;
+      padding: 18px 20px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       overflow: hidden;
@@ -233,8 +235,8 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 24px;
-      gap: 16px;
+      margin-bottom: 14px;
+      gap: 12px;
     }
 
     .node-info {
@@ -243,11 +245,11 @@
     }
 
     .node-name {
-      font-size: 21px;
+      font-size: 19px;
       font-weight: 700;
       letter-spacing: -0.015em;
       color: var(--text-primary);
-      margin-bottom: 4px;
+      margin-bottom: 2px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -260,8 +262,90 @@
       font-weight: 500;
     }
 
+    .section-title {
+      margin: 24px 0 12px;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .log-panel {
+      background: var(--bg-elevated);
+      backdrop-filter: saturate(180%) blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 8px 10px;
+      max-height: 420px;
+      overflow: auto;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .log-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      font-size: 12px;
+    }
+
+    .log-row:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      min-width: 90px;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .log-status {
+      font-weight: 600;
+      min-width: 42px;
+    }
+
+    .log-status.success {
+      color: var(--success);
+    }
+
+    .log-status.fail {
+      color: var(--error);
+    }
+
+    .log-name {
+      font-weight: 600;
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .log-tag {
+      color: var(--text-secondary);
+      font-size: 11px;
+      max-width: 160px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .log-meta {
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .log-error {
+      color: var(--error);
+      font-size: 11px;
+      max-width: 240px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .status-badge {
-      padding: 6px 14px;
+      padding: 4px 12px;
       border-radius: 12px;
       font-size: 12px;
       font-weight: 600;
@@ -304,8 +388,8 @@
       background: linear-gradient(135deg, rgba(0, 122, 255, 0.08), rgba(0, 122, 255, 0.03));
       border: 1px solid rgba(0, 122, 255, 0.15);
       border-radius: 16px;
-      padding: 20px 24px;
-      margin-bottom: 24px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -320,19 +404,19 @@
     .latency-info {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
     }
 
     .latency-icon {
-      width: 48px;
-      height: 48px;
+      width: 40px;
+      height: 40px;
       border-radius: 12px;
       background: linear-gradient(135deg, var(--primary), #0051d5);
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
-      font-size: 24px;
+      font-size: 20px;
       font-weight: 700;
     }
 
@@ -348,7 +432,7 @@
     }
 
     .latency-value {
-      font-size: 32px;
+      font-size: 26px;
       font-weight: 700;
       letter-spacing: -0.02em;
       color: var(--primary);
@@ -362,18 +446,22 @@
       font-weight: 500;
     }
 
+    .probe-inline {
+      margin-top: 8px;
+    }
+
     /* Metrics */
     .metrics {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 10px;
+      margin-bottom: 16px;
     }
 
     .metric {
       background: rgba(0, 0, 0, 0.02);
       border-radius: 12px;
-      padding: 16px;
+      padding: 12px 12px;
       transition: all 0.2s;
     }
 
@@ -389,7 +477,7 @@
     }
 
     .metric-value {
-      font-size: 24px;
+      font-size: 20px;
       font-weight: 700;
       letter-spacing: -0.015em;
       color: var(--text-primary);
@@ -401,7 +489,7 @@
 
     /* Footer */
     .node-footer {
-      padding-top: 20px;
+      padding-top: 12px;
       border-top: 1px solid var(--border);
       display: flex;
       gap: 8px;
@@ -495,6 +583,57 @@
     }
 
     .login-overlay.show { display: flex; }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1900;
+      animation: fadeIn 0.2s;
+    }
+
+    .loading-overlay.show { display: flex; }
+
+    .loading-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px 32px;
+      min-width: 320px;
+      text-align: center;
+      box-shadow: var(--shadow-md);
+    }
+
+    .loading-spinner {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-top-color: var(--primary);
+      margin: 0 auto 12px;
+      animation: spin 0.9s linear infinite;
+    }
+
+    .loading-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .loading-sub,
+    .loading-progress {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
 
     @keyframes fadeIn {
       from { opacity: 0; }
@@ -629,6 +768,51 @@
 
     .tab-content.active {
       display: block;
+    }
+
+    /* OpenAPI */
+    .api-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .api-card {
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+    }
+
+    .api-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .api-desc {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .api-params {
+      font-size: 13px;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    .api-code {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.04);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
     }
 
     /* Node Management */
@@ -867,6 +1051,373 @@
     .probe-progress-detail .success { color: var(--success); }
     .probe-progress-detail .failed { color: var(--error); }
 
+    /* Table List */
+    .list-toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .list-filters,
+    .list-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .list-toolbar .pagination-group {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .list-toolbar .page-size,
+    .list-toolbar .page-tabs,
+    .list-toolbar .page-info {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .list-toolbar .page-info {
+      white-space: nowrap;
+    }
+
+    .input,
+    .select {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      color: var(--text-primary);
+      font-family: var(--sf-pro);
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .input:focus,
+    .select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    }
+
+    .checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      user-select: none;
+    }
+
+    .table-wrap {
+      background: var(--bg-elevated);
+      backdrop-filter: saturate(180%) blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      box-shadow: var(--shadow-sm);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .nodes-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 2350px;
+    }
+
+    .nodes-table thead th {
+      text-align: left;
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.6);
+      position: sticky;
+      top: var(--filter-row-height, 0px);
+      z-index: 1;
+    }
+
+    .nodes-table thead tr.filter-row th {
+      top: 0;
+      z-index: 5;
+      background: var(--bg-solid);
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nodes-table thead tr.filter-row .sticky-col {
+      z-index: 6;
+    }
+
+    .filter-control {
+      width: 100%;
+      min-width: 120px;
+      height: 32px;
+      padding: 0 10px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .filter-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .filter-row .checkbox {
+      font-size: 12px;
+    }
+
+    .nodes-table .sticky-col {
+      position: sticky;
+      left: 0;
+      background: var(--bg-solid);
+      z-index: 3;
+      background-clip: padding-box;
+      box-shadow: 1px 0 0 rgba(0, 0, 0, 0.06);
+    }
+
+    .nodes-table .sticky-col-2 {
+      left: var(--sticky-col-1, 260px);
+      z-index: 4;
+    }
+
+    .nodes-table .ops-col {
+      min-width: 200px;
+    }
+
+    .nodes-table th:nth-child(14),
+    .nodes-table td:nth-child(14) {
+      min-width: 140px;
+    }
+
+    .nodes-table th:nth-child(19),
+    .nodes-table td:nth-child(19),
+    .nodes-table th:nth-child(20),
+    .nodes-table td:nth-child(20),
+    .nodes-table th:nth-child(21),
+    .nodes-table td:nth-child(21) {
+      min-width: 160px;
+    }
+
+    .nodes-table thead .sticky-col {
+      background: var(--bg-solid);
+      z-index: 4;
+    }
+
+    .nodes-table thead .sticky-col-2 {
+      z-index: 4;
+    }
+
+    .nodes-table tbody tr:hover .sticky-col {
+      background: var(--bg-base);
+    }
+
+    .nodes-table tbody td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      font-size: 14px;
+      vertical-align: middle;
+    }
+
+    .nodes-table tbody tr:hover {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .nodes-table .table-empty td {
+      text-align: center;
+      color: var(--text-secondary);
+      padding: 28px 16px;
+    }
+
+    .nodes-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .nodes-table th.sortable::after {
+      content: '';
+      display: inline-block;
+      margin-left: 6px;
+      border: 4px solid transparent;
+      border-top-color: var(--text-secondary);
+      opacity: 0.4;
+      transform: translateY(1px);
+    }
+
+    .nodes-table th.sortable.active.asc::after {
+      border-top-color: var(--primary);
+      opacity: 1;
+    }
+
+    .nodes-table th.sortable.active.desc::after {
+      border-top-color: transparent;
+      border-bottom-color: var(--primary);
+      opacity: 1;
+      transform: translateY(-1px);
+    }
+
+    .table-node {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .table-node .name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    .table-node .tag {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-family: "SF Mono", Menlo, Monaco, monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    .status-cell .status-badge {
+      padding: 4px 10px;
+      font-size: 11px;
+    }
+
+    .table-actions {
+      display: inline-flex;
+      gap: 8px;
+      flex-direction: column;
+      align-items: flex-start;
+      flex-wrap: nowrap;
+      width: 100%;
+    }
+
+    .btn-xs {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 8px;
+    }
+
+    .table-subtext {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .table-subtext.copyable {
+      cursor: pointer;
+    }
+
+    .table-subtext.copyable:hover {
+      color: var(--primary);
+    }
+
+    .table-port {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.04);
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .table-error {
+      color: var(--error);
+      font-weight: 600;
+    }
+
+    .table-latency {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cache-badge {
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(0, 122, 255, 0.12);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .pagination .page-size {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .pagination .page-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .page-btn {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .page-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .page-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .page-info {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .app { padding: 24px 16px; }
@@ -882,6 +1433,9 @@
       .manage-actions { flex-direction: column; }
       .config-node-card { flex-direction: column; align-items: stretch; }
       .config-node-actions { justify-content: flex-end; }
+      .list-toolbar { flex-direction: column; align-items: stretch; }
+      .list-filters, .list-actions { width: 100%; }
+      .input, .select { width: 100%; }
     }
   </style>
 </head>
@@ -909,6 +1463,7 @@
       <button class="tab active" onclick="switchTab('monitor')">📊 节点监控</button>
       <button class="tab" onclick="switchTab('manage')">⚙️ 节点管理</button>
       <button class="tab" onclick="switchTab('debug')">🐞 调试面板</button>
+      <button class="tab" onclick="switchTab('openapi')">🔗 OpenAPI</button>
     </div>
 
     <!-- 监控页面 -->
@@ -922,6 +1477,9 @@
       </button>
       <button class="btn btn-primary" id="probeAllBtn" onclick="probeAllNodes()">
         ⚡ 探测全部
+      </button>
+      <button class="btn btn-secondary" id="probePendingBtn" onclick="probePendingNodes()">
+        🧭 手动探测未测/失败
       </button>
       <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
         <span id="autoRefreshText">关闭自动刷新</span>
@@ -964,7 +1522,176 @@
       </div>
     </div>
 
-    <div id="nodesContainer" class="nodes-grid"></div>
+    <div class="list-toolbar">
+      <div class="list-actions">
+        <select id="sortSelect" class="select">
+          <option value="name">按名称</option>
+          <option value="status">按状态</option>
+          <option value="latency">按延迟</option>
+          <option value="pure">按纯净度</option>
+          <option value="fraud">按 Fraud Score</option>
+          <option value="bot">按 Bot(IPPure)</option>
+          <option value="active">按活跃连接</option>
+          <option value="failures">按失败次数</option>
+          <option value="mode">按模式</option>
+          <option value="lastSuccess">按最近成功</option>
+          <option value="lastFailure">按最近失败</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="sortDirBtn" type="button">降序</button>
+        <button class="btn btn-secondary btn-sm" id="probePageBtn" type="button">本页探测</button>
+      </div>
+      <div class="pagination-group">
+        <div class="page-size">
+          每页
+          <select id="pageSizeSelectTop" class="select">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+          </select>
+          条
+        </div>
+        <div class="page-info" id="pageInfoTop"></div>
+        <div class="page-tabs" id="pageTabsTop"></div>
+      </div>
+    </div>
+
+    <div id="nodesTableWrap" class="table-wrap">
+      <table class="nodes-table">
+        <thead>
+          <tr class="filter-row">
+            <th class="sticky-col sticky-col-1">
+              <input id="nodeSearch" class="input filter-control" type="text" placeholder="搜索名称或标签" />
+            </th>
+            <th class="sticky-col sticky-col-2 ops-col">
+              <button class="btn btn-secondary btn-xs" id="clearFiltersBtn" type="button">清除筛选</button>
+            </th>
+            <th>
+              <div class="filter-stack">
+                <select id="statusFilter" class="select filter-control">
+                  <option value="all">全部状态</option>
+                  <option value="healthy">健康</option>
+                  <option value="warning">警告</option>
+                  <option value="error">异常</option>
+                  <option value="blacklisted">已拉黑</option>
+                </select>
+                <label class="checkbox">
+                  <input type="checkbox" id="hideBlacklisted" />
+                  隐藏拉黑
+                </label>
+              </div>
+            </th>
+            <th></th>
+            <th>
+              <input id="latencyFilter" class="input filter-control" type="number" min="0" step="1" placeholder="延迟 ≤ ms" />
+            </th>
+            <th>
+              <select id="healthFilter" class="select filter-control">
+                <option value="all">全部健康度</option>
+                <option value="excellent">优秀</option>
+                <option value="good">良好</option>
+                <option value="fair">一般</option>
+                <option value="slow">较慢</option>
+                <option value="untested">未测试</option>
+              </select>
+            </th>
+            <th>
+              <input id="pureFilter" class="input filter-control" type="number" min="0" max="100" step="0.1" placeholder="纯净度 ≤" />
+            </th>
+            <th>
+              <input id="fraudFilter" class="input filter-control" type="number" min="0" max="100" step="0.1" placeholder="Fraud ≤" />
+            </th>
+            <th>
+              <select id="botFilter" class="select filter-control">
+                <option value="all">Bot(IPPure) 全部</option>
+                <option value="with">有数据</option>
+                <option value="without">无数据</option>
+              </select>
+            </th>
+            <th>
+              <select id="sharedFilter" class="select filter-control">
+                <option value="all">共享人数 全部</option>
+                <option value="with">有数据</option>
+                <option value="without">无数据</option>
+              </select>
+            </th>
+            <th>
+              <select id="ipTypeFilter" class="select filter-control">
+                <option value="all">全部 IP 类型</option>
+              </select>
+            </th>
+            <th>
+              <select id="ipNativeFilter" class="select filter-control">
+                <option value="all">全部 原生 IP</option>
+              </select>
+            </th>
+            <th>
+              <select id="countryFilter" class="select filter-control">
+                <option value="all">全部国家</option>
+              </select>
+            </th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th>
+              <select id="modeFilter" class="select filter-control">
+                <option value="all">全部模式</option>
+                <option value="pool">POOL</option>
+                <option value="multi-port">MULTI-PORT</option>
+                <option value="hybrid">HYBRID</option>
+              </select>
+            </th>
+            <th></th>
+            <th></th>
+            <th></th>
+          </tr>
+          <tr class="header-row">
+            <th class="sortable sticky-col sticky-col-1" data-sort="name">节点</th>
+            <th class="sticky-col sticky-col-2 ops-col">操作</th>
+            <th class="sortable" data-sort="status">状态</th>
+            <th>风控剩余</th>
+            <th class="sortable" data-sort="latency">延迟</th>
+            <th>健康度</th>
+            <th class="sortable" data-sort="pure">纯净度</th>
+            <th class="sortable" data-sort="fraud">Fraud Score</th>
+            <th class="sortable" data-sort="bot">Bot(IPPure)</th>
+            <th>共享人数(Ping0)</th>
+            <th>IP 类型</th>
+            <th>原生 IP</th>
+            <th>国家/地区</th>
+            <th>城市</th>
+            <th class="sortable" data-sort="active">活跃连接</th>
+            <th class="sortable" data-sort="failures">失败</th>
+            <th>重试</th>
+            <th class="sortable" data-sort="mode">模式</th>
+            <th class="sortable" data-sort="lastSuccess">最近成功</th>
+            <th class="sortable" data-sort="lastFailure">最近失败</th>
+            <th>检测时间</th>
+          </tr>
+        </thead>
+        <tbody id="nodesTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <div class="page-size">
+        每页
+        <select id="pageSizeSelect" class="select">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+          <option value="500">500</option>
+        </select>
+        条
+      </div>
+      <div class="page-tabs" id="pageTabs"></div>
+      <div class="page-info" id="pageInfo"></div>
+    </div>
 
     <div id="emptyState" class="empty" style="display: none;">
       <svg width="64" height="64" viewBox="0 0 64 64" fill="none" opacity="0.2">
@@ -1050,7 +1777,161 @@
         <h3>暂无调试数据</h3>
         <p>节点使用后将显示统计信息</p>
       </div>
+
+      <h3 class="section-title">最近 200 条检测记录</h3>
+      <div id="probeLogsContainer" class="log-panel"></div>
+      <div id="probeLogsEmpty" class="empty" style="display: none;">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" opacity="0.2">
+          <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="4"/>
+          <path d="M32 16v32M16 32h32" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        <h3>暂无检测记录</h3>
+        <p>探测后将显示最新日志</p>
+      </div>
     </div><!-- end debugTab -->
+
+    <!-- OpenAPI -->
+    <div id="openapiTab" class="tab-content">
+      <div class="manage-header">
+        <h2>OpenAPI</h2>
+        <p class="manage-desc">可用接口与参数说明（中文字段已统一使用英文参数名）</p>
+      </div>
+
+      <div class="api-grid">
+        <div class="api-card">
+          <div class="api-title">GET /api/nodes</div>
+          <div class="api-desc">返回所有节点（含 IP 信息与状态）</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">POST /api/auth</div>
+          <div class="api-desc">登录获取 token（如果未设置密码则无需调用）</div>
+          <div class="api-params">Body：{"password":"你的密码"}</div>
+          <div class="api-code">curl -X POST -H "Content-Type: application/json" -d '{"password":"your_password"}' http://127.0.0.1:9090/api/auth</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">GET /api/settings</div>
+          <div class="api-desc">获取运行设置（external_ip / probe_target / skip_cert_verify）</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/settings</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">PUT /api/settings</div>
+          <div class="api-desc">更新运行设置（保存到 config.yaml）</div>
+          <div class="api-params">Body：{"external_ip":"","probe_target":"www.apple.com:80","skip_cert_verify":true}</div>
+          <div class="api-code">curl -X PUT -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" -d '{"external_ip":"","probe_target":"www.apple.com:80","skip_cert_verify":true}' http://127.0.0.1:9090/api/settings</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">GET /api/export</div>
+          <div class="api-desc">导出可用代理池节点（纯文本，每行一个）</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/export</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">GET /api/export/filter</div>
+          <div class="api-desc">按条件筛选并返回代理地址（JSON）</div>
+          <div class="api-params">
+            参数：<br>
+            shared_min / shared_max（共享人数范围）<br>
+            country（国家/地区，支持英文）<br>
+            ip_src（原生/广播）<br>
+            ip_attr（住宅/机房）<br>
+            fraud_max（Fraud Score ≤）<br>
+            pure_max（纯净度 ≤）<br>
+            latency_max（延迟 ≤，ms）
+          </div>
+          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" "http://127.0.0.1:9090/api/export/filter?shared_max=10&amp;country=United%20States&amp;ip_src=原生&amp;fraud_max=50&amp;pure_max=50&amp;latency_max=500"</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">POST /api/nodes/{tag}/probe</div>
+          <div class="api-desc">手动探测单个节点</div>
+          <div class="api-params">参数：路径参数 tag</div>
+          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/&lt;tag&gt;/probe</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">POST /api/nodes/{tag}/release</div>
+          <div class="api-desc">解除节点拉黑</div>
+          <div class="api-params">参数：路径参数 tag</div>
+          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/&lt;tag&gt;/release</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">POST /api/nodes/probe-all</div>
+          <div class="api-desc">批量探测节点（SSE 进度流）</div>
+          <div class="api-params">
+            参数：<br>
+            interval_ms（起始检测间隔）<br>
+            interval_step_ms（每次成功后增加的间隔）<br>
+            max_interval_ms（最大间隔）
+          </div>
+          <div class="api-code">curl -N -X POST -H "Authorization: Bearer &lt;token&gt;" "http://127.0.0.1:9090/api/nodes/probe-all?interval_ms=200&amp;interval_step_ms=100&amp;max_interval_ms=2000"</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">GET /api/debug</div>
+          <div class="api-desc">调试信息与探测日志</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/debug</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">GET /api/nodes/config</div>
+          <div class="api-desc">读取配置节点列表</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/config</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">POST /api/nodes/config</div>
+          <div class="api-desc">新增配置节点</div>
+          <div class="api-params">Body：{"name":"","uri":"","port":0,"username":"","password":""}</div>
+          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" -d '{"name":"node","uri":"vless://..."}' http://127.0.0.1:9090/api/nodes/config</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">PUT /api/nodes/config/{name}</div>
+          <div class="api-desc">更新配置节点</div>
+          <div class="api-params">Body：{"name":"","uri":"","port":0,"username":"","password":""}</div>
+          <div class="api-code">curl -X PUT -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" -d '{"name":"node","uri":"vless://..."}' http://127.0.0.1:9090/api/nodes/config/&lt;name&gt;</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">DELETE /api/nodes/config/{name}</div>
+          <div class="api-desc">删除配置节点</div>
+          <div class="api-params">参数：路径参数 name</div>
+          <div class="api-code">curl -X DELETE -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/config/&lt;name&gt;</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">POST /api/reload</div>
+          <div class="api-desc">重载配置（中断现有连接）</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/reload</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">GET /api/subscription/status</div>
+          <div class="api-desc">查看订阅刷新状态</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/subscription/status</div>
+        </div>
+
+        <div class="api-card">
+          <div class="api-title">POST /api/subscription/refresh</div>
+          <div class="api-desc">立即刷新订阅</div>
+          <div class="api-params">参数：无</div>
+          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/subscription/refresh</div>
+        </div>
+      </div>
+    </div><!-- end openapiTab -->
   </div>
 
   <div id="toast" class="toast">
@@ -1138,6 +2019,16 @@
     </div>
   </div>
 
+  <!-- 加载提示 -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-card">
+      <div class="loading-spinner"></div>
+      <div class="loading-title" id="loadingTitle">加载配置中...</div>
+      <div class="loading-sub" id="loadingSub">正在获取订阅节点</div>
+      <div class="loading-progress" id="loadingProgress"></div>
+    </div>
+  </div>
+
   <!-- 登录弹窗 -->
   <div id="loginOverlay" class="login-overlay">
     <div class="login-modal">
@@ -1169,6 +2060,36 @@
     let autoRefreshInterval = null;
     let isAutoRefresh = true;
     let isAuthenticated = false;
+    let allNodes = [];
+    let proxySettings = {
+      external_ip: '',
+      proxy_username: '',
+      proxy_password: ''
+    };
+    let listState = {
+      search: '',
+      status: 'all',
+      mode: 'all',
+      country: 'all',
+      ipType: 'all',
+      ipNative: 'all',
+      botFilter: 'all',
+      sharedFilter: 'all',
+      pureLimit: null,
+      fraudLimit: null,
+      latencyLimit: null,
+      healthFilter: 'all',
+      page: 1,
+      pageSize: 20,
+      sortKey: 'status',
+      sortDir: 'asc',
+      hideBlacklisted: false
+    };
+    let autoProbeInterval = null;
+    const autoProbeIntervalMs = 3000;
+    const probeRetryState = new Map();
+    const probeInFlight = new Set();
+    let isManualProbePending = false;
 
     // 检查是否需要登录
     async function checkAuth() {
@@ -1183,6 +2104,19 @@
       } catch (err) {
         console.error('检查认证状态失败:', err);
         return false;
+      }
+    }
+
+    async function loadProxySettings() {
+      try {
+        const res = await fetch('/api/settings');
+        if (!res.ok) return;
+        const data = await res.json();
+        proxySettings.external_ip = data.external_ip || '';
+        proxySettings.proxy_username = data.proxy_username || '';
+        proxySettings.proxy_password = data.proxy_password || '';
+      } catch (err) {
+        console.error('加载代理设置失败:', err);
       }
     }
 
@@ -1258,12 +2192,74 @@
       return `${Math.floor(diff / 86400)}天前`;
     }
 
+    function formatLogTime(timeStr) {
+      if (!timeStr || timeStr === '0001-01-01T00:00:00Z') return '—';
+      const date = new Date(timeStr);
+      if (Number.isNaN(date.getTime())) return '—';
+      const now = new Date();
+      if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString('zh-CN');
+      }
+      return date.toLocaleString('zh-CN');
+    }
+
+    function formatRemaining(untilStr) {
+      if (!untilStr || untilStr === '0001-01-01T00:00:00Z') return '—';
+      const until = new Date(untilStr);
+      if (Number.isNaN(until.getTime())) return '—';
+      const now = new Date();
+      let diff = Math.floor((until - now) / 1000);
+      if (diff <= 0) return '—';
+      const hours = Math.floor(diff / 3600);
+      diff -= hours * 3600;
+      const minutes = Math.floor(diff / 60);
+      const seconds = diff - minutes * 60;
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      }
+      if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
+      }
+      return `${seconds}s`;
+    }
+
+    function timeValue(timeStr) {
+      if (!timeStr || timeStr === '0001-01-01T00:00:00Z') return 0;
+      const ts = Date.parse(timeStr);
+      return Number.isFinite(ts) ? ts : 0;
+    }
+
+    function getProbeState(node) {
+      const lastSuccess = timeValue(node.last_success);
+      const lastFailure = timeValue(node.last_failure);
+      if (!lastSuccess && !lastFailure) return 'untested';
+      if (lastFailure && lastFailure > lastSuccess) return 'failed';
+      return 'ok';
+    }
+
+    function getLastProbeTime(node) {
+      if (node.last_probe_at) return node.last_probe_at;
+      const successTs = timeValue(node.last_success);
+      const failureTs = timeValue(node.last_failure);
+      if (!successTs && !failureTs) return '';
+      return successTs >= failureTs ? node.last_success : node.last_failure;
+    }
+
     function getLatencyQuality(ms) {
       if (ms < 0) return { text: '未测试', color: 'var(--text-secondary)' };
       if (ms < 100) return { text: '优秀', color: 'var(--success)' };
       if (ms < 200) return { text: '良好', color: 'var(--primary)' };
       if (ms < 500) return { text: '一般', color: 'var(--warning)' };
       return { text: '较慢', color: 'var(--error)' };
+    }
+
+    function getHealthKey(node) {
+      const ms = node.last_latency_ms ?? -1;
+      if (ms < 0) return 'untested';
+      if (ms < 100) return 'excellent';
+      if (ms < 200) return 'good';
+      if (ms < 500) return 'fair';
+      return 'slow';
     }
 
     function getNodeStatus(node) {
@@ -1291,6 +2287,917 @@
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
+    async function copyText(text) {
+      if (!text || text === '—') return;
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('已复制: ' + text, 'success');
+      } catch (err) {
+        const el = document.createElement('textarea');
+        el.value = text;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        try {
+          document.execCommand('copy');
+          showToast('已复制: ' + text, 'success');
+        } catch (e) {
+          showToast('复制失败: ' + e.message, 'error');
+        } finally {
+          document.body.removeChild(el);
+        }
+      }
+    }
+
+    function buildProxyAddress(node) {
+      if (!node) return '';
+      const port = node.port;
+      if (!port) return '';
+      const currentHost = window.location.hostname || '';
+      let host = currentHost || proxySettings.external_ip || node.listen_address || '0.0.0.0';
+      if ((host === '0.0.0.0' || host === '::') && currentHost) {
+        host = currentHost;
+      } else if ((host === '0.0.0.0' || host === '::') && proxySettings.external_ip) {
+        host = proxySettings.external_ip;
+      }
+      const user = proxySettings.proxy_username || '';
+      const pass = proxySettings.proxy_password || '';
+      const auth = user && pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : '';
+      return `http://${auth}${host}:${port}`;
+    }
+
+    function copyProxyAddress(tagEncoded) {
+      const tag = decodeURIComponent(tagEncoded || '');
+      const node = allNodes.find(n => n.tag === tag);
+      if (!node) {
+        showToast('未找到节点', 'error');
+        return;
+      }
+      const addr = buildProxyAddress(node);
+      if (!addr) {
+        showToast('缺少端口或地址', 'error');
+        return;
+      }
+      copyText(addr);
+    }
+
+    function defaultSortDirForKey(key) {
+      if (key === 'name' || key === 'mode' || key === 'status') return 'asc';
+      return 'desc';
+    }
+
+    function parsePercent(value) {
+      if (!value) return null;
+      const match = String(value).match(/\d+(?:\.\d+)?/);
+      if (!match) return null;
+      const num = parseFloat(match[0]);
+      return Number.isFinite(num) ? num : null;
+    }
+
+    function parseSharedCount(value) {
+      if (!value) return null;
+      const nums = String(value).match(/\d+/g);
+      if (!nums || nums.length === 0) return null;
+      let upper = parseInt(nums[nums.length - 1], 10);
+      if (String(value).includes('+')) upper += 1;
+      return Number.isFinite(upper) ? upper : null;
+    }
+
+    function getBotScoreValue(node) {
+      const botVal = parsePercent(getBotDisplayValue(node));
+      if (botVal !== null) return botVal;
+      return null;
+    }
+
+    function getPureScoreValue(node) {
+      const info = node.ip_info || {};
+      return parsePercent(info.pure_score);
+    }
+
+    function getFraudScoreValue(node) {
+      if (getProbeState(node) !== 'ok') return null;
+      const info = node.ip_info || {};
+      return parsePercent(info.fraud_score);
+    }
+
+    function getSortValue(node, key) {
+      switch (key) {
+        case 'name':
+          return (node.name || node.tag || '').toLowerCase();
+        case 'status':
+          return ({ healthy: 0, warning: 1, error: 2, blacklisted: 3 })[getNodeStatus(node)] ?? 9;
+        case 'latency':
+          return node.last_latency_ms ?? -1;
+        case 'pure':
+          return getPureScoreValue(node) ?? -1;
+        case 'fraud':
+          return getFraudScoreValue(node) ?? -1;
+        case 'bot':
+          return getBotScoreValue(node) ?? -1;
+        case 'active':
+          return node.active_connections || 0;
+        case 'failures':
+          return node.failure_count || 0;
+        case 'mode':
+          return (node.mode || '').toLowerCase();
+        case 'lastSuccess':
+          return node.last_success ? Date.parse(node.last_success) || 0 : 0;
+        case 'lastFailure':
+          return node.last_failure ? Date.parse(node.last_failure) || 0 : 0;
+        default:
+          return 0;
+      }
+    }
+
+    function getRetryState(tag) {
+      if (!probeRetryState.has(tag)) {
+        probeRetryState.set(tag, { count: 0, lastAttempt: 0 });
+      }
+      return probeRetryState.get(tag);
+    }
+
+    function recordProbeResult(tag, ok) {
+      if (!tag) return;
+      const state = getRetryState(tag);
+      state.lastAttempt = Date.now();
+      if (ok) {
+        state.count = 0;
+      } else {
+        state.count += 1;
+      }
+    }
+
+    function shouldAutoProbe(node) {
+      if (!node) return false;
+      if (node.blacklisted) return false;
+      if (!node.initial_check_done) return true;
+      if (node.available === false) return true;
+      const latency = node.last_latency_ms ?? -1;
+      if (latency < 0) return true;
+      const lastFailure = node.last_failure ? Date.parse(node.last_failure) || 0 : 0;
+      const lastSuccess = node.last_success ? Date.parse(node.last_success) || 0 : 0;
+      if (lastFailure && lastFailure > lastSuccess) return true;
+      return false;
+    }
+
+    function getRetryCountForNode(node) {
+      if (!node || !node.tag) return 0;
+      if (!shouldAutoProbe(node)) {
+        const state = probeRetryState.get(node.tag);
+        if (state) state.count = 0;
+        return 0;
+      }
+      const state = probeRetryState.get(node.tag);
+      return state ? state.count : 0;
+    }
+
+    function pickNextAutoProbe(nodes) {
+      if (!nodes.length) return null;
+      let candidate = null;
+      let oldest = Number.POSITIVE_INFINITY;
+      nodes.forEach(node => {
+        if (!node.tag || probeInFlight.has(node.tag)) return;
+        const state = probeRetryState.get(node.tag);
+        const lastAttempt = state ? state.lastAttempt : 0;
+        if (lastAttempt < oldest) {
+          oldest = lastAttempt;
+          candidate = node;
+        }
+      });
+      return candidate;
+    }
+
+    function getNodeCountry(node) {
+      const ipInfo = node.ip_info || {};
+      if (ipInfo.country) return ipInfo.country;
+      if (ipInfo.location) {
+        const parts = ipInfo.location.split(/\s+/).filter(Boolean);
+        if (parts.length > 0) return parts[0];
+      }
+      return '未知';
+    }
+
+    function getNodeIpType(node) {
+      const ipInfo = node.ip_info || {};
+      return ipInfo.ip_attr || '未知';
+    }
+
+    function getNodeIpNative(node) {
+      const ipInfo = node.ip_info || {};
+      return ipInfo.ip_src || '未知';
+    }
+
+    function getBotDisplayValue(node) {
+      if (getProbeState(node) !== 'ok') return '';
+      const info = node.ip_info || {};
+      return String(info.bot_score || '').trim();
+    }
+
+    function getSharedDisplayValue(node) {
+      if (getProbeState(node) !== 'ok') return '';
+      const info = node.ip_info || {};
+      return String(info.shared_users || '').trim();
+    }
+
+    function formatProbeField(value, state) {
+      if (state === 'failed') return '检测失败';
+      if (state === 'untested') return '未检测';
+      const text = String(value || '').trim();
+      return text ? text : '—';
+    }
+
+    function updateCountryOptions(nodes) {
+      const select = document.getElementById('countryFilter');
+      if (!select) return;
+
+      const current = listState.country || 'all';
+      const countries = new Set();
+      nodes.forEach(node => {
+        countries.add(getNodeCountry(node));
+      });
+
+      const sorted = Array.from(countries).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      select.innerHTML = ['all', ...sorted].map(value => {
+        const label = value === 'all' ? '全部国家' : value;
+        return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+      }).join('');
+
+      if (current !== 'all' && !countries.has(current)) {
+        listState.country = 'all';
+      }
+      select.value = listState.country;
+    }
+
+    function updateBotOptions(nodes) {
+      const select = document.getElementById('botFilter');
+      if (!select) return;
+
+      const current = listState.botFilter || 'all';
+      const values = new Set();
+      nodes.forEach(node => {
+        const val = getBotDisplayValue(node);
+        if (val) values.add(val);
+      });
+
+      const sorted = Array.from(values).sort((a, b) => {
+        const na = parsePercent(a);
+        const nb = parsePercent(b);
+        if (na !== null && nb !== null) return na - nb;
+        return a.localeCompare(b, 'zh-CN');
+      });
+
+      const options = [
+        { value: 'all', label: 'Bot(IPPure) 全部' },
+        { value: 'with', label: '有数据' },
+        { value: 'without', label: '无数据' }
+      ];
+      sorted.forEach(value => {
+        options.push({ value, label: value });
+      });
+
+      select.innerHTML = options.map(opt => {
+        return `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`;
+      }).join('');
+
+      if (!options.some(opt => opt.value === current)) {
+        listState.botFilter = 'all';
+      }
+      select.value = listState.botFilter;
+    }
+
+    function updateSharedOptions(nodes) {
+      const select = document.getElementById('sharedFilter');
+      if (!select) return;
+
+      const current = listState.sharedFilter || 'all';
+      const values = new Set();
+      nodes.forEach(node => {
+        const val = getSharedDisplayValue(node);
+        if (val) values.add(val);
+      });
+
+      const sorted = Array.from(values).sort((a, b) => {
+        const na = parseSharedCount(a);
+        const nb = parseSharedCount(b);
+        if (na !== null && nb !== null) return na - nb;
+        return a.localeCompare(b, 'zh-CN');
+      });
+
+      const options = [
+        { value: 'all', label: '共享人数 全部' },
+        { value: 'with', label: '有数据' },
+        { value: 'without', label: '无数据' }
+      ];
+      sorted.forEach(value => {
+        options.push({ value, label: value });
+      });
+
+      select.innerHTML = options.map(opt => {
+        return `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`;
+      }).join('');
+
+      if (!options.some(opt => opt.value === current)) {
+        listState.sharedFilter = 'all';
+      }
+      select.value = listState.sharedFilter;
+    }
+
+    function updateIpTypeOptions(nodes) {
+      const select = document.getElementById('ipTypeFilter');
+      if (!select) return;
+
+      const current = listState.ipType || 'all';
+      const types = new Set();
+      nodes.forEach(node => {
+        types.add(getNodeIpType(node));
+      });
+
+      const sorted = Array.from(types).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      select.innerHTML = ['all', ...sorted].map(value => {
+        const label = value === 'all' ? '全部 IP 类型' : value;
+        return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+      }).join('');
+
+      if (current !== 'all' && !types.has(current)) {
+        listState.ipType = 'all';
+      }
+      select.value = listState.ipType;
+    }
+
+    function updateIpNativeOptions(nodes) {
+      const select = document.getElementById('ipNativeFilter');
+      if (!select) return;
+
+      const current = listState.ipNative || 'all';
+      const natives = new Set();
+      nodes.forEach(node => {
+        natives.add(getNodeIpNative(node));
+      });
+
+      const sorted = Array.from(natives).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      select.innerHTML = ['all', ...sorted].map(value => {
+        const label = value === 'all' ? '全部 原生 IP' : value;
+        return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+      }).join('');
+
+      if (current !== 'all' && !natives.has(current)) {
+        listState.ipNative = 'all';
+      }
+      select.value = listState.ipNative;
+    }
+
+    function applyFilters(nodes) {
+      const search = listState.search.trim().toLowerCase();
+      return nodes.filter(node => {
+        const status = getNodeStatus(node);
+        if (listState.hideBlacklisted && node.blacklisted) return false;
+        if (listState.status !== 'all' && status !== listState.status) return false;
+        if (listState.mode !== 'all' && (node.mode || '').toLowerCase() !== listState.mode) return false;
+        if (listState.country !== 'all' && getNodeCountry(node) !== listState.country) return false;
+        if (listState.ipType !== 'all' && getNodeIpType(node) !== listState.ipType) return false;
+        if (listState.ipNative !== 'all' && getNodeIpNative(node) !== listState.ipNative) return false;
+        if (listState.latencyLimit !== null) {
+          const latencyVal = node.last_latency_ms ?? -1;
+          if (latencyVal < 0) return false;
+          if (latencyVal > listState.latencyLimit) return false;
+        }
+        if (listState.healthFilter !== 'all' && getHealthKey(node) !== listState.healthFilter) {
+          return false;
+        }
+        if (listState.pureLimit !== null) {
+          const pureVal = getPureScoreValue(node);
+          if (pureVal === null) return false;
+          if (pureVal > listState.pureLimit) return false;
+        }
+        if (listState.fraudLimit !== null) {
+          const fraudVal = getFraudScoreValue(node);
+          if (fraudVal === null) return false;
+          if (fraudVal > listState.fraudLimit) return false;
+        }
+        const botValue = getBotDisplayValue(node);
+        const hasBot = Boolean(botValue);
+        if (listState.botFilter === 'with' && !hasBot) return false;
+        if (listState.botFilter === 'without' && hasBot) return false;
+        if (!['all', 'with', 'without'].includes(listState.botFilter) && botValue !== listState.botFilter) {
+          return false;
+        }
+        const sharedValue = getSharedDisplayValue(node);
+        const hasShared = Boolean(sharedValue);
+        if (listState.sharedFilter === 'with' && !hasShared) return false;
+        if (listState.sharedFilter === 'without' && hasShared) return false;
+        if (!['all', 'with', 'without'].includes(listState.sharedFilter) && sharedValue !== listState.sharedFilter) {
+          return false;
+        }
+        if (!search) return true;
+        const name = (node.name || '').toLowerCase();
+        const tag = (node.tag || '').toLowerCase();
+        return name.includes(search) || tag.includes(search);
+      });
+    }
+
+    function sortNodes(nodes) {
+      const key = listState.sortKey;
+      const dir = listState.sortDir === 'asc' ? 1 : -1;
+      return nodes.slice().sort((a, b) => {
+        if (key === 'latency') {
+          const la = a.last_latency_ms ?? -1;
+          const lb = b.last_latency_ms ?? -1;
+          const aUnknown = la < 0;
+          const bUnknown = lb < 0;
+          if (aUnknown && bUnknown) return 0;
+          if (aUnknown) return 1;
+          if (bUnknown) return -1;
+          return (la - lb) * dir;
+        }
+        if (key === 'pure') {
+          const va = getPureScoreValue(a);
+          const vb = getPureScoreValue(b);
+          const aUnknown = va === null;
+          const bUnknown = vb === null;
+          if (aUnknown && bUnknown) return 0;
+          if (aUnknown) return 1;
+          if (bUnknown) return -1;
+          return (va - vb) * dir;
+        }
+        if (key === 'fraud') {
+          const va = getFraudScoreValue(a);
+          const vb = getFraudScoreValue(b);
+          const aUnknown = va === null;
+          const bUnknown = vb === null;
+          if (aUnknown && bUnknown) return 0;
+          if (aUnknown) return 1;
+          if (bUnknown) return -1;
+          return (va - vb) * dir;
+        }
+        if (key === 'bot') {
+          const va = getBotScoreValue(a);
+          const vb = getBotScoreValue(b);
+          const aUnknown = va === null;
+          const bUnknown = vb === null;
+          if (aUnknown && bUnknown) return 0;
+          if (aUnknown) return 1;
+          if (bUnknown) return -1;
+          return (va - vb) * dir;
+        }
+        const va = getSortValue(a, key);
+        const vb = getSortValue(b, key);
+        if (va < vb) return -1 * dir;
+        if (va > vb) return 1 * dir;
+        return 0;
+      });
+    }
+
+    function updateSortIndicators() {
+      const ths = document.querySelectorAll('.nodes-table th.sortable');
+      ths.forEach(th => {
+        const isActive = th.dataset.sort === listState.sortKey;
+        th.classList.toggle('active', isActive);
+        th.classList.toggle('asc', isActive && listState.sortDir === 'asc');
+        th.classList.toggle('desc', isActive && listState.sortDir === 'desc');
+      });
+    }
+
+    function paginateNodes(nodes) {
+      const total = nodes.length;
+      const pageSize = listState.pageSize || 20;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      let page = listState.page || 1;
+      if (page > totalPages) page = totalPages;
+      if (page < 1) page = 1;
+      listState.page = page;
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+      return {
+        items: nodes.slice(start, end),
+        total,
+        totalPages,
+        page,
+        pageSize
+      };
+    }
+
+    function getCurrentPageNodes() {
+      const filtered = applyFilters(allNodes);
+      const sorted = sortNodes(filtered);
+      const paged = paginateNodes(sorted);
+      return paged.items || [];
+    }
+
+    function buildPageRange(current, totalPages) {
+      if (totalPages <= 7) {
+        return Array.from({ length: totalPages }, (_, i) => i + 1);
+      }
+      const range = [];
+      range.push(1);
+      if (current > 4) range.push('...');
+      const start = Math.max(2, current - 1);
+      const end = Math.min(totalPages - 1, current + 1);
+      for (let i = start; i <= end; i++) range.push(i);
+      if (current < totalPages - 3) range.push('...');
+      range.push(totalPages);
+      return range;
+    }
+
+    function renderPagination(paged) {
+      const tabs = document.getElementById('pageTabs');
+      const info = document.getElementById('pageInfo');
+      const tabsTop = document.getElementById('pageTabsTop');
+      const infoTop = document.getElementById('pageInfoTop');
+      if ((!tabs || !info) && (!tabsTop || !infoTop)) return;
+
+      const { total, totalPages, page } = paged;
+      if (info) info.textContent = `第 ${page} / ${totalPages} 页，共 ${total} 条`;
+      if (infoTop) infoTop.textContent = `第 ${page} / ${totalPages} 页，共 ${total} 条`;
+
+      const parts = [];
+      const prevDisabled = page <= 1;
+      const nextDisabled = page >= totalPages;
+
+      parts.push(`<button class="page-btn" ${prevDisabled ? 'disabled' : ''} data-page="${page - 1}">上一页</button>`);
+
+      const range = buildPageRange(page, totalPages);
+      range.forEach(item => {
+        if (item === '...') {
+          parts.push('<span class="page-btn" disabled>…</span>');
+        } else {
+          const active = item === page ? 'active' : '';
+          parts.push(`<button class="page-btn ${active}" data-page="${item}">${item}</button>`);
+        }
+      });
+
+      parts.push(`<button class="page-btn" ${nextDisabled ? 'disabled' : ''} data-page="${page + 1}">下一页</button>`);
+
+      const html = parts.join('');
+      const bindTabs = (container) => {
+        if (!container) return;
+        container.innerHTML = html;
+        container.querySelectorAll('button[data-page]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const target = parseInt(btn.dataset.page, 10);
+            if (!Number.isFinite(target)) return;
+            listState.page = target;
+            applyAndRender();
+          });
+        });
+      };
+      bindTabs(tabs);
+      bindTabs(tabsTop);
+    }
+
+    function renderTable(nodes) {
+      const tableWrap = document.getElementById('nodesTableWrap');
+      const tbody = document.getElementById('nodesTableBody');
+      const emptyState = document.getElementById('emptyState');
+
+      if (nodes.length === 0) {
+        if (allNodes.length === 0) {
+          tbody.innerHTML = '';
+          tableWrap.style.display = 'none';
+          emptyState.style.display = 'block';
+          return;
+        }
+        const headerRow = document.querySelector('.nodes-table thead tr.header-row');
+        const colCount = headerRow ? headerRow.children.length : 1;
+        const message = '暂无筛选结果，点击“清除筛选”恢复列表';
+        tbody.innerHTML = `<tr class="table-empty"><td colspan="${colCount}">${message}</td></tr>`;
+        tableWrap.style.display = 'block';
+        emptyState.style.display = 'none';
+        requestAnimationFrame(updateStickyOffsets);
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      tableWrap.style.display = 'block';
+
+      tbody.innerHTML = nodes.map(node => {
+        const status = getNodeStatus(node);
+        const latency = node.last_latency_ms ?? -1;
+        const quality = getLatencyQuality(latency);
+        const name = node.name || node.tag || '—';
+        const tag = node.tag || '—';
+        const nameText = escapeHtml(name);
+        const tagText = escapeHtml(tag);
+        const mode = (node.mode || '—').toString().toUpperCase();
+        const ipInfo = node.ip_info || {};
+        const probeState = getProbeState(node);
+        const pureScore = ipInfo.pure_score || '—';
+        const fraudScore = formatProbeField(ipInfo.fraud_score, probeState);
+        const botDisplay = formatProbeField(ipInfo.bot_score, probeState);
+        const sharedUsers = formatProbeField(ipInfo.shared_users, probeState);
+        const ipTypeText = ipInfo.ip_attr || '—';
+        const ipNativeText = ipInfo.ip_src || '—';
+        const countryText = ipInfo.country || (ipInfo.location || '').split(/\s+/).filter(Boolean)[0] || '—';
+        const cityText = ipInfo.city || (ipInfo.location || '').split(/\s+/).slice(1).filter(Boolean).join(' ') || '—';
+        const ipText = ipInfo.ip || '—';
+        const ipTextEscaped = escapeHtml(ipText);
+        const ipCopyPayload = ipText && ipText !== '—' ? encodeURIComponent(ipText) : '';
+        const ipCopyAttr = ipCopyPayload ? `onclick="copyText(decodeURIComponent('${ipCopyPayload}'))"` : '';
+        const ipCopyClass = ipCopyPayload ? 'table-subtext copyable' : 'table-subtext';
+        const portText = node.port ? String(node.port) : '—';
+        const retryCount = getRetryCountForNode(node);
+        const cacheHit = Boolean(node.last_probe_cached);
+        const latencyText = latency >= 0 ? `${latency} ms` : '—';
+        const latencyHtml = cacheHit
+          ? `<span class="table-latency"><span>${latencyText}</span><span class="cache-badge">缓存</span></span>`
+          : latencyText;
+        const lastProbeTime = getLastProbeTime(node);
+
+        return `
+          <tr>
+            <td class="sticky-col sticky-col-1">
+              <div class="table-node">
+                <div class="name" title="${nameText}">${nameText}</div>
+                <div class="tag" title="${tagText}">${tagText}</div>
+                <div class="${ipCopyClass}" title="${ipTextEscaped}" ${ipCopyAttr}>${ipTextEscaped}</div>
+              </div>
+            </td>
+            <td class="sticky-col sticky-col-2 ops-col">
+              <div class="table-actions">
+                <button class="btn btn-secondary btn-sm" onclick="probe('${node.tag}')">🔍 探测</button>
+                <span class="table-port">端口 ${portText}${node.port ? ` <button class=\"btn btn-secondary btn-xs\" onclick=\"copyProxyAddress('${encodeURIComponent(node.tag || '')}')\">复制</button>` : ''}</span>
+                ${node.blacklisted ? `
+                  <button class="btn btn-primary btn-sm" onclick="release('${node.tag}')">解除拉黑</button>
+                ` : ''}
+              </div>
+            </td>
+            <td class="status-cell">
+              <span class="status-badge ${status}">
+                <span class="status-icon"></span>
+                ${getStatusText(status)}
+              </span>
+            </td>
+            <td>${node.blacklisted ? formatRemaining(node.blacklisted_until) : '—'}</td>
+            <td>${latencyHtml}</td>
+            <td style="color: ${quality.color};">${quality.text}</td>
+            <td>${escapeHtml(pureScore)}</td>
+            <td>${escapeHtml(fraudScore)}</td>
+            <td>${escapeHtml(botDisplay)}</td>
+            <td>${escapeHtml(sharedUsers)}</td>
+            <td>${escapeHtml(ipTypeText)}</td>
+            <td>${escapeHtml(ipNativeText)}</td>
+            <td>${escapeHtml(countryText)}</td>
+            <td>
+              <div>${escapeHtml(cityText)}</div>
+            </td>
+            <td>${node.active_connections || 0}</td>
+            <td class="${(node.failure_count || 0) > 0 ? 'table-error' : ''}">${node.failure_count || 0}</td>
+            <td>${retryCount > 0 ? retryCount : '—'}</td>
+            <td>${mode}</td>
+            <td>${formatTime(node.last_success)}</td>
+            <td>${formatTime(node.last_failure)}</td>
+            <td>${formatTime(lastProbeTime)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      requestAnimationFrame(updateStickyOffsets);
+    }
+
+    function updateStickyOffsets() {
+      const table = document.querySelector('.nodes-table');
+      if (!table) return;
+      const firstSticky = table.querySelector('thead th.sticky-col-1');
+      if (firstSticky) {
+        const width = Math.ceil(firstSticky.getBoundingClientRect().width);
+        table.style.setProperty('--sticky-col-1', `${width}px`);
+      }
+      const filterRow = table.querySelector('thead tr.filter-row');
+      if (filterRow) {
+        const height = Math.ceil(filterRow.getBoundingClientRect().height);
+        table.style.setProperty('--filter-row-height', `${height}px`);
+      } else {
+        table.style.setProperty('--filter-row-height', '0px');
+      }
+    }
+
+    function applyAndRender() {
+      const filtered = applyFilters(allNodes);
+      const sorted = sortNodes(filtered);
+      const paged = paginateNodes(sorted);
+      renderTable(paged.items);
+      renderPagination(paged);
+      updateSortIndicators();
+    }
+
+    function render(nodes) {
+      allNodes = nodes;
+      const tags = new Set(nodes.map(n => n.tag));
+      for (const tag of probeRetryState.keys()) {
+        if (!tags.has(tag)) probeRetryState.delete(tag);
+      }
+      updateCountryOptions(nodes);
+      updateBotOptions(nodes);
+      updateSharedOptions(nodes);
+      updateIpTypeOptions(nodes);
+      updateIpNativeOptions(nodes);
+      applyAndRender();
+    }
+
+    function setupListControls() {
+      const searchInput = document.getElementById('nodeSearch');
+      const statusFilter = document.getElementById('statusFilter');
+      const modeFilter = document.getElementById('modeFilter');
+      const countryFilter = document.getElementById('countryFilter');
+      const ipTypeFilter = document.getElementById('ipTypeFilter');
+      const ipNativeFilter = document.getElementById('ipNativeFilter');
+      const pureFilter = document.getElementById('pureFilter');
+      const fraudFilter = document.getElementById('fraudFilter');
+      const latencyFilter = document.getElementById('latencyFilter');
+      const healthFilter = document.getElementById('healthFilter');
+      const botFilter = document.getElementById('botFilter');
+      const sharedFilter = document.getElementById('sharedFilter');
+      const pageSizeSelect = document.getElementById('pageSizeSelect');
+      const pageSizeSelectTop = document.getElementById('pageSizeSelectTop');
+      const sortSelect = document.getElementById('sortSelect');
+      const sortDirBtn = document.getElementById('sortDirBtn');
+      const probePageBtn = document.getElementById('probePageBtn');
+      const hideBlacklisted = document.getElementById('hideBlacklisted');
+      const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+
+      if (!searchInput || !statusFilter || !modeFilter || !countryFilter || !ipTypeFilter || !ipNativeFilter || !pureFilter || !fraudFilter || !latencyFilter || !healthFilter || !botFilter || !sharedFilter || !pageSizeSelect || !pageSizeSelectTop) return;
+
+      searchInput.addEventListener('input', () => {
+        listState.search = searchInput.value || '';
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      statusFilter.addEventListener('change', () => {
+        listState.status = statusFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      modeFilter.addEventListener('change', () => {
+        listState.mode = modeFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      countryFilter.addEventListener('change', () => {
+        listState.country = countryFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      ipTypeFilter.addEventListener('change', () => {
+        listState.ipType = ipTypeFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      ipNativeFilter.addEventListener('change', () => {
+        listState.ipNative = ipNativeFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      latencyFilter.addEventListener('input', () => {
+        const value = parseFloat(latencyFilter.value);
+        listState.latencyLimit = Number.isFinite(value) ? value : null;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      healthFilter.addEventListener('change', () => {
+        listState.healthFilter = healthFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      pureFilter.addEventListener('input', () => {
+        const value = parseFloat(pureFilter.value);
+        listState.pureLimit = Number.isFinite(value) ? value : null;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      fraudFilter.addEventListener('input', () => {
+        const value = parseFloat(fraudFilter.value);
+        listState.fraudLimit = Number.isFinite(value) ? value : null;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      botFilter.addEventListener('change', () => {
+        listState.botFilter = botFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      sharedFilter.addEventListener('change', () => {
+        listState.sharedFilter = sharedFilter.value;
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      const handlePageSizeChange = (value) => {
+        listState.pageSize = Number.isFinite(value) ? value : 20;
+        listState.page = 1;
+        pageSizeSelect.value = String(listState.pageSize || 20);
+        pageSizeSelectTop.value = String(listState.pageSize || 20);
+        applyAndRender();
+      };
+
+      pageSizeSelect.addEventListener('change', () => {
+        const value = parseInt(pageSizeSelect.value, 10);
+        handlePageSizeChange(value);
+      });
+
+      pageSizeSelectTop.addEventListener('change', () => {
+        const value = parseInt(pageSizeSelectTop.value, 10);
+        handlePageSizeChange(value);
+      });
+
+      sortSelect.addEventListener('change', () => {
+        listState.sortKey = sortSelect.value;
+        listState.sortDir = defaultSortDirForKey(listState.sortKey);
+        sortDirBtn.textContent = listState.sortDir === 'asc' ? '升序' : '降序';
+        listState.page = 1;
+        applyAndRender();
+      });
+
+      sortDirBtn.addEventListener('click', () => {
+        listState.sortDir = listState.sortDir === 'asc' ? 'desc' : 'asc';
+        sortDirBtn.textContent = listState.sortDir === 'asc' ? '升序' : '降序';
+        applyAndRender();
+      });
+
+      if (probePageBtn) {
+        probePageBtn.addEventListener('click', () => {
+          probeCurrentPage();
+        });
+      }
+
+      hideBlacklisted.addEventListener('change', () => {
+        listState.hideBlacklisted = hideBlacklisted.checked;
+        applyAndRender();
+      });
+
+      document.querySelectorAll('.nodes-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+          const key = th.dataset.sort;
+          if (!key) return;
+          if (listState.sortKey === key) {
+            listState.sortDir = listState.sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            listState.sortKey = key;
+            listState.sortDir = defaultSortDirForKey(key);
+          }
+          sortSelect.value = listState.sortKey;
+          sortDirBtn.textContent = listState.sortDir === 'asc' ? '升序' : '降序';
+          applyAndRender();
+        });
+      });
+
+      if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+          listState.search = '';
+          listState.status = 'all';
+          listState.mode = 'all';
+          listState.country = 'all';
+          listState.ipType = 'all';
+          listState.ipNative = 'all';
+          listState.botFilter = 'all';
+          listState.sharedFilter = 'all';
+          listState.pureLimit = null;
+          listState.fraudLimit = null;
+          listState.latencyLimit = null;
+          listState.healthFilter = 'all';
+          listState.page = 1;
+          listState.sortKey = 'status';
+          listState.sortDir = defaultSortDirForKey(listState.sortKey);
+          listState.hideBlacklisted = false;
+
+          searchInput.value = '';
+          statusFilter.value = 'all';
+          modeFilter.value = 'all';
+          countryFilter.value = 'all';
+          ipTypeFilter.value = 'all';
+          ipNativeFilter.value = 'all';
+          pureFilter.value = '';
+          fraudFilter.value = '';
+          latencyFilter.value = '';
+          healthFilter.value = 'all';
+          botFilter.value = 'all';
+          sharedFilter.value = 'all';
+          sortSelect.value = listState.sortKey;
+          sortDirBtn.textContent = listState.sortDir === 'asc' ? '升序' : '降序';
+          hideBlacklisted.checked = false;
+
+          applyAndRender();
+        });
+      }
+
+      sortSelect.value = listState.sortKey;
+      sortDirBtn.textContent = listState.sortDir === 'asc' ? '升序' : '降序';
+      pageSizeSelect.value = String(listState.pageSize || 20);
+      pageSizeSelectTop.value = String(listState.pageSize || 20);
+      updateSortIndicators();
+    }
+
     async function refresh() {
       try {
         const res = await fetch('/api/nodes');
@@ -1303,8 +3210,10 @@
         }
         if (!res.ok) throw new Error('请求失败');
         const data = await res.json();
-        render(data.nodes || []);
-        updateStats(data.nodes || []);
+        const nodes = data.nodes || [];
+        render(nodes);
+        updateStats(nodes);
+        fetchSubscriptionStatus();
         document.getElementById('lastUpdate').textContent = `更新于 ${new Date().toLocaleTimeString('zh-CN')}`;
       } catch (err) {
         showToast('刷新失败: ' + err.message, 'error');
@@ -1318,100 +3227,119 @@
       document.getElementById('blacklistedNodes').textContent = nodes.filter(n => n.blacklisted).length;
     }
 
-    function render(nodes) {
-      const container = document.getElementById('nodesContainer');
-      const emptyState = document.getElementById('emptyState');
-
-      if (nodes.length === 0) {
-        container.innerHTML = '';
-        emptyState.style.display = 'block';
-        return;
-      }
-
-      emptyState.style.display = 'none';
-      container.innerHTML = nodes.map(node => {
-        const status = getNodeStatus(node);
-        const latency = node.last_latency_ms || -1;
-        const quality = getLatencyQuality(latency);
-
-        return `
-          <div class="node-card ${status}">
-            <div class="node-header">
-              <div class="node-info">
-                <div class="node-name">${node.name || node.tag}</div>
-                <div class="node-tag">${node.tag}</div>
-              </div>
-              <span class="status-badge ${status}">
-                <span class="status-icon"></span>
-                ${getStatusText(status)}
-              </span>
-            </div>
-
-            <div class="latency-display">
-              <div class="latency-info">
-                <div class="latency-icon">⚡</div>
-                <div class="latency-text">
-                  <div class="latency-label">节点延迟</div>
-                  <div class="latency-value">${latency >= 0 ? latency : '—'}</div>
-                  ${latency >= 0 ? `<div class="latency-quality" style="color: ${quality.color}">${quality.text} · ${latency} ms</div>` : '<div class="latency-quality">点击探测按钮测试延迟</div>'}
-                </div>
-              </div>
-            </div>
-
-            <div class="metrics">
-              <div class="metric">
-                <div class="metric-label">监听端口</div>
-                <div class="metric-value">${node.port || '—'}</div>
-              </div>
-              <div class="metric">
-                <div class="metric-label">活跃连接</div>
-                <div class="metric-value success">${node.active_connections || 0}</div>
-              </div>
-              <div class="metric">
-                <div class="metric-label">失败次数</div>
-                <div class="metric-value ${node.failure_count > 0 ? 'error' : ''}">${node.failure_count || 0}</div>
-              </div>
-              <div class="metric">
-                <div class="metric-label">运行模式</div>
-                <div class="metric-value" style="font-size: 16px; text-transform: uppercase;">${node.mode || '—'}</div>
-              </div>
-            </div>
-
-            <div class="time-info">
-              <div>✓ 最近成功: ${formatTime(node.last_success)}</div>
-              <div>✗ 最近失败: ${formatTime(node.last_failure)}</div>
-              ${node.blacklisted ? `<div style="color: var(--error);">⚠ 拉黑至: ${new Date(node.blacklisted_until).toLocaleString('zh-CN')}</div>` : ''}
-            </div>
-
-            <div class="node-footer">
-              <div style="flex: 1;"></div>
-              <button class="btn btn-secondary btn-sm" onclick="probe('${node.tag}')">
-                🔍 探测延迟
-              </button>
-              ${node.blacklisted ? `
-                <button class="btn btn-primary btn-sm" onclick="release('${node.tag}')">
-                  解除拉黑
-                </button>
-              ` : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    async function probe(tag) {
+    async function probeNode(tag, options = {}) {
+      if (!tag || probeInFlight.has(tag)) return;
+      const { silent = false } = options;
+      probeInFlight.add(tag);
+      const state = getRetryState(tag);
+      state.lastAttempt = Date.now();
       try {
-        showToast('正在探测节点 ' + tag + '...', 'success');
+        if (!silent) {
+          showToast('正在探测节点 ' + tag + '...', 'success');
+        }
         const res = await fetch('/api/nodes/' + encodeURIComponent(tag) + '/probe', { method: 'POST' });
         const data = await res.json();
         if (data.error) {
-          showToast('探测失败: ' + data.error, 'error');
+          recordProbeResult(tag, false);
+          if (!silent) {
+            showToast('探测失败: ' + data.error, 'error');
+          }
         } else {
-          showToast(`探测成功！延迟: ${data.latency_ms}ms`, 'success');
+          recordProbeResult(tag, true);
+          if (!silent) {
+            showToast(`探测成功！延迟: ${data.latency_ms}ms`, 'success');
+          }
         }
-        setTimeout(refresh, 500);
+        setTimeout(() => {
+          refresh();
+        }, 500);
       } catch (err) {
-        showToast('探测失败: ' + err.message, 'error');
+        recordProbeResult(tag, false);
+        if (!silent) {
+          showToast('探测失败: ' + err.message, 'error');
+        }
+      } finally {
+        probeInFlight.delete(tag);
+        applyAndRender();
+      }
+    }
+
+    function probe(tag) {
+      return probeNode(tag, { silent: false });
+    }
+
+    async function probePendingNodes() {
+      if (isProbing || isManualProbePending) {
+        showToast('探测正在进行中...', 'error');
+        return;
+      }
+      const pending = allNodes.filter(shouldAutoProbe);
+      if (pending.length === 0) {
+        showToast('暂无待探测节点', 'success');
+        return;
+      }
+      isManualProbePending = true;
+      try {
+        for (const node of pending) {
+          if (!node.tag) continue;
+          await probeNode(node.tag, { silent: false });
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } finally {
+        isManualProbePending = false;
+      }
+    }
+
+    async function probeCurrentPage() {
+      if (isProbing || isManualProbePending) {
+        showToast('探测正在进行中...', 'error');
+        return;
+      }
+      const items = getCurrentPageNodes();
+      const targets = items.filter(node => node && node.tag);
+      if (targets.length === 0) {
+        showToast('当前页暂无可探测节点', 'success');
+        return;
+      }
+      isManualProbePending = true;
+      const btn = document.getElementById('probePageBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '探测中...';
+      }
+      try {
+        for (const node of targets) {
+          await probeNode(node.tag, { silent: false });
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } finally {
+        isManualProbePending = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '本页探测';
+        }
+      }
+    }
+
+    function autoProbeTick() {
+      if (isProbing || isManualProbePending || !isAutoRefresh) return;
+      const pending = allNodes.filter(shouldAutoProbe);
+      if (pending.length === 0) return;
+      const next = pickNextAutoProbe(pending);
+      if (!next || !next.tag) return;
+      probeNode(next.tag, { silent: true });
+    }
+
+    function startAutoProbe() {
+      if (autoProbeInterval) return;
+      autoProbeInterval = setInterval(autoProbeTick, autoProbeIntervalMs);
+      autoProbeTick();
+    }
+
+    function stopAutoProbe() {
+      if (autoProbeInterval) {
+        clearInterval(autoProbeInterval);
+        autoProbeInterval = null;
       }
     }
 
@@ -1544,6 +3472,7 @@
     function startAutoRefresh() {
       if (autoRefreshInterval) return;
       autoRefreshInterval = setInterval(refresh, 10000);
+      startAutoProbe();
     }
 
     function stopAutoRefresh() {
@@ -1551,6 +3480,7 @@
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
       }
+      stopAutoProbe();
     }
 
     // 订阅状态相关
@@ -1574,6 +3504,7 @@
       if (!data.enabled) {
         card.style.display = 'none';
         btn.style.display = 'none';
+        updateLoadingOverlay({ enabled: false });
         return;
       }
 
@@ -1584,6 +3515,7 @@
         statusEl.textContent = '刷新中...';
         statusEl.style.color = 'var(--warning)';
         trendEl.textContent = '正在获取订阅...';
+        updateLoadingOverlay(data);
         return;
       }
 
@@ -1600,6 +3532,38 @@
         trendEl.textContent = '等待首次刷新';
         trendEl.style.color = 'var(--text-secondary)';
       }
+
+      updateLoadingOverlay(data);
+    }
+
+    function updateLoadingOverlay(data) {
+      const overlay = document.getElementById('loadingOverlay');
+      const titleEl = document.getElementById('loadingTitle');
+      const subEl = document.getElementById('loadingSub');
+      const progressEl = document.getElementById('loadingProgress');
+
+      if (!overlay || !titleEl || !subEl || !progressEl) return;
+
+      const enabled = !!data.enabled;
+      const isRefreshing = !!data.is_refreshing;
+      const nodeCount = data.node_count || 0;
+      const total = data.progress_total || 0;
+      const current = data.progress_current || 0;
+      const nodes = data.progress_nodes || nodeCount || 0;
+
+      const shouldShow = enabled && (isRefreshing || nodeCount === 0);
+      if (!shouldShow) {
+        overlay.classList.remove('show');
+        return;
+      }
+
+      overlay.classList.add('show');
+      titleEl.textContent = isRefreshing ? '加载配置中...' : '等待订阅数据...';
+      const parts = [];
+      if (total > 0) parts.push(`订阅进度 ${current}/${total}`);
+      parts.push(`已获取 ${nodes} 节点`);
+      subEl.textContent = parts.join(' · ');
+      progressEl.textContent = total > 0 ? `${current}/${total}` : '';
     }
 
     async function refreshSubscription() {
@@ -1684,68 +3648,102 @@
       if (nodes.length === 0) {
         container.innerHTML = '';
         emptyState.style.display = 'block';
-        return;
+      } else {
+        emptyState.style.display = 'none';
+        container.innerHTML = nodes.map(node => {
+          const calls = (node.success_count || 0) + (node.failure_count || 0);
+          const successRate = calls > 0 ? ((node.success_count || 0) / calls * 100) : 0;
+          const rateColor = successRate > 90 ? 'var(--success)' : (successRate > 70 ? 'var(--warning)' : 'var(--error)');
+          const timeline = node.timeline || [];
+
+          const timelineHtml = timeline.length > 0 ? timeline.map(t => {
+            const color = t.success ? 'var(--success)' : 'var(--error)';
+            let time = '未知时间';
+            try {
+              const d = new Date(t.time);
+              if (!isNaN(d.getTime())) {
+                time = d.toLocaleTimeString('zh-CN');
+              }
+            } catch (e) {}
+            const title = `${time} - ${t.success ? '成功' : '失败'}${t.latency_ms > 0 ? ' (' + t.latency_ms + 'ms)' : ''}${t.error ? ' - ' + t.error : ''}`;
+            return `<div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;" title="${escapeHtml(title)}"></div>`;
+          }).join('') : '<span style="font-size:12px;color:var(--text-secondary);">暂无最近记录</span>';
+
+          return `
+            <div class="node-card">
+              <div class="node-header" style="margin-bottom:16px;">
+                <div class="node-info">
+                  <div class="node-name">${escapeHtml(node.name || node.tag)}</div>
+                  <div class="node-tag">${escapeHtml(node.tag)}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:32px;font-weight:700;color:${rateColor};">${successRate.toFixed(1)}%</div>
+                  <div style="font-size:12px;color:var(--text-secondary);">共 ${calls} 次调用</div>
+                </div>
+              </div>
+              <div class="metrics" style="margin-bottom:16px;">
+                <div class="metric">
+                  <div class="metric-label">成功次数</div>
+                  <div class="metric-value success">${node.success_count || 0}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">失败次数</div>
+                  <div class="metric-value ${node.failure_count > 0 ? 'error' : ''}">${node.failure_count || 0}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">活跃连接</div>
+                  <div class="metric-value">${node.active_connections || 0}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">最近延迟</div>
+                  <div class="metric-value">${node.last_latency_ms >= 0 ? node.last_latency_ms + 'ms' : '—'}</div>
+                </div>
+              </div>
+              <div style="background:rgba(0,0,0,0.03);padding:12px 16px;border-radius:12px;">
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">最近 ${timeline.length} 次调用</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                  ${timelineHtml}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
       }
 
-      emptyState.style.display = 'none';
-      container.innerHTML = nodes.map(node => {
-        const calls = (node.success_count || 0) + (node.failure_count || 0);
-        const successRate = calls > 0 ? ((node.success_count || 0) / calls * 100) : 0;
-        const rateColor = successRate > 90 ? 'var(--success)' : (successRate > 70 ? 'var(--warning)' : 'var(--error)');
-        const timeline = node.timeline || [];
 
-        const timelineHtml = timeline.length > 0 ? timeline.map(t => {
-          const color = t.success ? 'var(--success)' : 'var(--error)';
-          let time = '未知时间';
-          try {
-            const d = new Date(t.time);
-            if (!isNaN(d.getTime())) {
-              time = d.toLocaleTimeString('zh-CN');
-            }
-          } catch (e) {}
-          const title = `${time} - ${t.success ? '成功' : '失败'}${t.latency_ms > 0 ? ' (' + t.latency_ms + 'ms)' : ''}${t.error ? ' - ' + t.error : ''}`;
-          return `<div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;" title="${escapeHtml(title)}"></div>`;
-        }).join('') : '<span style="font-size:12px;color:var(--text-secondary);">暂无最近记录</span>';
-
-        return `
-          <div class="node-card">
-            <div class="node-header" style="margin-bottom:16px;">
-              <div class="node-info">
-                <div class="node-name">${escapeHtml(node.name || node.tag)}</div>
-                <div class="node-tag">${escapeHtml(node.tag)}</div>
+      const logs = data.probe_logs || [];
+      const logContainer = document.getElementById('probeLogsContainer');
+      const logEmpty = document.getElementById('probeLogsEmpty');
+      if (logContainer && logEmpty) {
+        if (logs.length === 0) {
+          logContainer.innerHTML = '';
+          logEmpty.style.display = 'block';
+        } else {
+          logEmpty.style.display = 'none';
+          logContainer.innerHTML = logs.map(log => {
+            const name = log.name || log.tag || '—';
+            const tag = log.tag || '—';
+            const statusClass = log.success ? 'success' : 'fail';
+            const statusText = log.success ? '成功' : '失败';
+            const latencyText = log.latency_ms > 0 ? `${log.latency_ms}ms` : '—';
+            const sourceText = log.source === 'auto' ? '自动' : (log.source === 'manual' ? '手动' : '检测');
+            const cachedBadge = log.cached ? '<span class="cache-badge">缓存</span>' : '';
+            const errorText = log.error ? escapeHtml(log.error) : '';
+            return `
+              <div class="log-row">
+                <span class="log-time">${formatLogTime(log.time)}</span>
+                <span class="log-status ${statusClass}">${statusText}</span>
+                <span class="log-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                <span class="log-tag" title="${escapeHtml(tag)}">${escapeHtml(tag)}</span>
+                <span class="log-meta">${latencyText}</span>
+                <span class="log-meta">${sourceText}</span>
+                ${cachedBadge}
+                ${errorText ? `<span class="log-error" title="${errorText}">${errorText}</span>` : ''}
               </div>
-              <div style="text-align:right;">
-                <div style="font-size:32px;font-weight:700;color:${rateColor};">${successRate.toFixed(1)}%</div>
-                <div style="font-size:12px;color:var(--text-secondary);">共 ${calls} 次调用</div>
-              </div>
-            </div>
-            <div class="metrics" style="margin-bottom:16px;">
-              <div class="metric">
-                <div class="metric-label">成功次数</div>
-                <div class="metric-value success">${node.success_count || 0}</div>
-              </div>
-              <div class="metric">
-                <div class="metric-label">失败次数</div>
-                <div class="metric-value ${node.failure_count > 0 ? 'error' : ''}">${node.failure_count || 0}</div>
-              </div>
-              <div class="metric">
-                <div class="metric-label">活跃连接</div>
-                <div class="metric-value">${node.active_connections || 0}</div>
-              </div>
-              <div class="metric">
-                <div class="metric-label">最近延迟</div>
-                <div class="metric-value">${node.last_latency_ms >= 0 ? node.last_latency_ms + 'ms' : '—'}</div>
-              </div>
-            </div>
-            <div style="background:rgba(0,0,0,0.03);padding:12px 16px;border-radius:12px;">
-              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">最近 ${timeline.length} 次调用</div>
-              <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-                ${timelineHtml}
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
+            `;
+          }).join('');
+        }
+      }
     }
 
     // ========== 系统设置功能 ==========
@@ -1757,6 +3755,9 @@
           document.getElementById('settingExternalIP').value = data.external_ip || '';
           document.getElementById('settingProbeTarget').value = data.probe_target || '';
           document.getElementById('settingSkipCertVerify').checked = data.skip_cert_verify || false;
+          proxySettings.external_ip = data.external_ip || '';
+          proxySettings.proxy_username = data.proxy_username || '';
+          proxySettings.proxy_password = data.proxy_password || '';
           document.getElementById('settingsError').classList.remove('show');
           document.getElementById('settingsOverlay').classList.add('show');
         })
@@ -1790,6 +3791,9 @@
 
         const data = await res.json();
         if (res.ok) {
+          if (data.external_ip !== undefined) {
+            proxySettings.external_ip = data.external_ip || '';
+          }
           if (data.need_reload) {
             showToast('设置已保存，SSL 设置需重载生效', 'success');
           } else {
@@ -2051,9 +4055,14 @@
 
     // 初始化
     (async function init() {
+      setupListControls();
+      window.addEventListener('resize', () => {
+        updateStickyOffsets();
+      });
       const authenticated = await checkAuth();
       if (authenticated) {
         isAuthenticated = true;
+        await loadProxySettings();
         refresh();
         fetchSubscriptionStatus();
         startAutoRefresh();

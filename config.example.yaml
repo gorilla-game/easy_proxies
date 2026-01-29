@@ -5,6 +5,7 @@ management:
   enabled: true
   listen: 0.0.0.0:9090
   probe_target: www.apple.com:80
+  ip_info_source: ping0  # IP 检测源：ping0(默认) 或 ippure，支持自动降级
   password: ""  # WebUI 访问密码，为空则不需要密码（可选）
 listener:
   address: 0.0.0.0
@@ -44,4 +45,3 @@ nodes:
 # nodes_file: nodes.txt
 # nodes:
 #   - uri: "vless://xxx@server:443#额外节点"
-

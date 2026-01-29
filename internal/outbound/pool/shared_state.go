@@ -15,6 +15,7 @@ type sharedMemberState struct {
 	failures         int
 	blacklisted      bool
 	blacklistedUntil time.Time
+	penaltyMinutes   int
 	entry            atomic.Pointer[monitor.EntryHandle]
 	active           atomic.Int32
 }
@@ -69,7 +70,9 @@ func (s *sharedMemberState) recordFailure(cause error, threshold int, duration t
 	var until time.Time
 	if s.failures >= threshold {
 		triggered = true
-		until = time.Now().Add(duration)
+		s.penaltyMinutes++
+		extra := time.Duration(s.penaltyMinutes) * time.Minute
+		until = time.Now().Add(duration + extra)
 		s.failures = 0
 		s.blacklisted = true
 		s.blacklistedUntil = until
@@ -88,6 +91,7 @@ func (s *sharedMemberState) recordFailure(cause error, threshold int, duration t
 func (s *sharedMemberState) recordSuccess() {
 	s.mu.Lock()
 	s.failures = 0
+	s.penaltyMinutes = 0
 	s.mu.Unlock()
 
 	if entry := s.entry.Load(); entry != nil {

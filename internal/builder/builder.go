@@ -109,6 +109,7 @@ func Build(cfg *config.Config) (option.Options, error) {
 			FailureThreshold:  cfg.Pool.FailureThreshold,
 			BlacklistDuration: cfg.Pool.BlacklistDuration,
 			Metadata:          metadata,
+			IPInfoSource:      cfg.Management.IPInfoSource,
 		}
 		outbounds = append(outbounds, option.Outbound{
 			Type:    poolout.Type,
@@ -134,6 +135,7 @@ func Build(cfg *config.Config) (option.Options, error) {
 				FailureThreshold:  cfg.Pool.FailureThreshold,
 				BlacklistDuration: cfg.Pool.BlacklistDuration,
 				Metadata:          perMeta,
+				IPInfoSource:      cfg.Management.IPInfoSource,
 			}
 			perPool := option.Outbound{
 				Type:    poolout.Type,

@@ -3,6 +3,7 @@ package subscription
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"easy_proxies/internal/boxmgr"
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/monitor"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Logger defines logging interface.
@@ -55,6 +58,17 @@ type Manager struct {
 	lastNodesModTime time.Time // Last known modification time of nodes.txt
 }
 
+type subFetchResult struct {
+	URL       string
+	NodeCount int
+	Err       error
+}
+
+type subFailureState struct {
+	ConsecutiveDays int    `json:"consecutive_days"`
+	LastFailureDate string `json:"last_failure_date"` // YYYY-MM-DD
+}
+
 // New creates a SubscriptionManager.
 func New(cfg *config.Config, boxMgr *boxmgr.Manager, opts ...Option) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -88,6 +102,7 @@ func (m *Manager) Start() {
 	interval := m.baseCfg.SubscriptionRefresh.Interval
 	m.logger.Infof("starting subscription refresh, interval: %s", interval)
 
+	go m.doRefresh()
 	go m.refreshLoop(interval)
 }
 
@@ -188,11 +203,16 @@ func (m *Manager) doRefresh() {
 
 	m.mu.Lock()
 	m.status.IsRefreshing = true
+	m.status.ProgressTotal = len(m.baseCfg.Subscriptions)
+	m.status.ProgressCurrent = 0
+	m.status.ProgressNodes = 0
+	m.status.ProgressMessage = "starting"
 	m.mu.Unlock()
 
 	defer func() {
 		m.mu.Lock()
 		m.status.IsRefreshing = false
+		m.status.ProgressMessage = ""
 		m.status.RefreshCount++
 		m.mu.Unlock()
 	}()
@@ -200,7 +220,14 @@ func (m *Manager) doRefresh() {
 	m.logger.Infof("starting subscription refresh")
 
 	// Fetch nodes from all subscriptions
-	nodes, err := m.fetchAllSubscriptions()
+	nodes, results, err := m.fetchAllSubscriptions()
+	removed, removeErr := m.handleSubscriptionFailures(results)
+	if removeErr != nil {
+		m.logger.Warnf("failed to update subscription failures: %v", removeErr)
+	}
+	if len(removed) > 0 {
+		m.logger.Warnf("removed %d failed subscriptions", len(removed))
+	}
 	if err != nil {
 		m.logger.Errorf("fetch subscriptions failed: %v", err)
 		m.mu.Lock()
@@ -278,6 +305,22 @@ func (m *Manager) getNodesFilePath() string {
 	return filepath.Join(filepath.Dir(m.baseCfg.FilePath()), "nodes.txt")
 }
 
+func (m *Manager) getFailureStatePath() string {
+	cfgPath := m.baseCfg.FilePath()
+	if cfgPath == "" {
+		return "subscription_failures.json"
+	}
+	return filepath.Join(filepath.Dir(cfgPath), "subscription_failures.json")
+}
+
+func (m *Manager) getDeletedSubscriptionsPath() string {
+	cfgPath := m.baseCfg.FilePath()
+	if cfgPath == "" {
+		return "del_subscriptions.txt"
+	}
+	return filepath.Join(filepath.Dir(cfgPath), "del_subscriptions.txt")
+}
+
 // writeNodesToFile writes nodes to a file (one URI per line).
 func (m *Manager) writeNodesToFile(path string, nodes []config.NodeConfig) error {
 	var lines []string
@@ -289,6 +332,192 @@ func (m *Manager) writeNodesToFile(path string, nodes []config.NodeConfig) error
 		content += "\n"
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func (m *Manager) handleSubscriptionFailures(results []subFetchResult) ([]string, error) {
+	if len(results) == 0 {
+		return nil, nil
+	}
+
+	state, err := m.loadFailureState()
+	if err != nil {
+		m.logger.Warnf("load failure state: %v", err)
+		state = map[string]subFailureState{}
+	}
+
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+
+	removeSet := map[string]struct{}{}
+	for _, res := range results {
+		url := strings.TrimSpace(res.URL)
+		if url == "" {
+			continue
+		}
+		if res.Err == nil {
+			delete(state, url)
+			continue
+		}
+
+		entry := state[url]
+		switch entry.LastFailureDate {
+		case today:
+			// Already counted for today.
+		case yesterday:
+			entry.ConsecutiveDays++
+			entry.LastFailureDate = today
+		default:
+			entry.ConsecutiveDays = 1
+			entry.LastFailureDate = today
+		}
+
+		if entry.ConsecutiveDays >= 3 {
+			removeSet[url] = struct{}{}
+			delete(state, url)
+			continue
+		}
+		state[url] = entry
+	}
+
+	if err := m.saveFailureState(state); err != nil {
+		return nil, err
+	}
+
+	if len(removeSet) == 0 {
+		return nil, nil
+	}
+
+	var removed []string
+	for url := range removeSet {
+		removed = append(removed, url)
+	}
+
+	if err := m.appendDeletedSubscriptions(removed); err != nil {
+		return removed, err
+	}
+	if err := m.removeSubscriptionsFromConfig(removed); err != nil {
+		return removed, err
+	}
+	return removed, nil
+}
+
+func (m *Manager) loadFailureState() (map[string]subFailureState, error) {
+	path := m.getFailureStatePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]subFailureState{}, nil
+		}
+		return nil, err
+	}
+	if len(data) == 0 {
+		return map[string]subFailureState{}, nil
+	}
+	state := map[string]subFailureState{}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+func (m *Manager) saveFailureState(state map[string]subFailureState) error {
+	path := m.getFailureStatePath()
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func (m *Manager) appendDeletedSubscriptions(subs []string) error {
+	if len(subs) == 0 {
+		return nil
+	}
+	path := m.getDeletedSubscriptionsPath()
+
+	existing := map[string]struct{}{}
+	if data, err := os.ReadFile(path); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			existing[line] = struct{}{}
+		}
+	}
+
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for _, sub := range subs {
+		sub = strings.TrimSpace(sub)
+		if sub == "" {
+			continue
+		}
+		if _, ok := existing[sub]; ok {
+			continue
+		}
+		if _, err := file.WriteString(sub + "\n"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) removeSubscriptionsFromConfig(subs []string) error {
+	if len(subs) == 0 {
+		return nil
+	}
+	cfgPath := m.baseCfg.FilePath()
+	if cfgPath == "" {
+		return fmt.Errorf("config file path is unknown")
+	}
+
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	var saveCfg config.Config
+	if err := yaml.Unmarshal(data, &saveCfg); err != nil {
+		return fmt.Errorf("decode config: %w", err)
+	}
+
+	removeSet := map[string]struct{}{}
+	for _, sub := range subs {
+		sub = strings.TrimSpace(sub)
+		if sub == "" {
+			continue
+		}
+		removeSet[sub] = struct{}{}
+	}
+
+	var filtered []string
+	for _, sub := range saveCfg.Subscriptions {
+		sub = strings.TrimSpace(sub)
+		if sub == "" {
+			continue
+		}
+		if _, ok := removeSet[sub]; ok {
+			continue
+		}
+		filtered = append(filtered, sub)
+	}
+	saveCfg.Subscriptions = filtered
+
+	newData, err := yaml.Marshal(&saveCfg)
+	if err != nil {
+		return fmt.Errorf("encode config: %w", err)
+	}
+	if err := os.WriteFile(cfgPath, newData, 0o644); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+
+	m.baseCfg.Subscriptions = filtered
+	return nil
 }
 
 // computeNodesHash computes a hash of node URIs for change detection.
@@ -364,8 +593,9 @@ func (m *Manager) MarkNodesModified() {
 }
 
 // fetchAllSubscriptions fetches nodes from all configured subscription URLs.
-func (m *Manager) fetchAllSubscriptions() ([]config.NodeConfig, error) {
+func (m *Manager) fetchAllSubscriptions() ([]config.NodeConfig, []subFetchResult, error) {
 	var allNodes []config.NodeConfig
+	var results []subFetchResult
 	var lastErr error
 
 	timeout := m.baseCfg.SubscriptionRefresh.Timeout
@@ -373,22 +603,36 @@ func (m *Manager) fetchAllSubscriptions() ([]config.NodeConfig, error) {
 		timeout = 30 * time.Second
 	}
 
-	for _, subURL := range m.baseCfg.Subscriptions {
+	total := len(m.baseCfg.Subscriptions)
+	for idx, subURL := range m.baseCfg.Subscriptions {
+		subURL = strings.TrimSpace(subURL)
 		nodes, err := m.fetchSubscription(subURL, timeout)
+		results = append(results, subFetchResult{
+			URL:       subURL,
+			NodeCount: len(nodes),
+			Err:       err,
+		})
 		if err != nil {
 			m.logger.Warnf("failed to fetch %s: %v", subURL, err)
 			lastErr = err
-			continue
+		} else {
+			m.logger.Infof("fetched %d nodes from subscription", len(nodes))
+			allNodes = append(allNodes, nodes...)
 		}
-		m.logger.Infof("fetched %d nodes from subscription", len(nodes))
-		allNodes = append(allNodes, nodes...)
+
+		m.mu.Lock()
+		m.status.ProgressCurrent = idx + 1
+		m.status.ProgressTotal = total
+		m.status.ProgressNodes = len(allNodes)
+		m.status.ProgressMessage = "fetching"
+		m.mu.Unlock()
 	}
 
 	if len(allNodes) == 0 && lastErr != nil {
-		return nil, lastErr
+		return nil, results, lastErr
 	}
 
-	return allNodes, nil
+	return allNodes, results, nil
 }
 
 // fetchSubscription fetches and parses a single subscription URL.

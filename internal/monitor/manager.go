@@ -2,9 +2,12 @@ package monitor
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -26,6 +29,7 @@ type Config struct {
 	ProxyPassword  string // 代理池的密码（用于导出）
 	ExternalIP     string // 外部 IP 地址，用于导出时替换 0.0.0.0
 	SkipCertVerify bool   // 全局跳过 SSL 证书验证
+	CheckResultDir string // 检测结果输出目录（默认 checker）
 }
 
 // NodeInfo is static metadata about a proxy entry.
@@ -38,6 +42,24 @@ type NodeInfo struct {
 	Port          uint16 `json:"port,omitempty"`
 }
 
+// IPInfo represents IP quality and geo details collected during probe.
+type IPInfo struct {
+	IP          string    `json:"ip,omitempty"`
+	PureScore   string    `json:"pure_score,omitempty"`
+	BotScore    string    `json:"bot_score,omitempty"`
+	SharedUsers string    `json:"shared_users,omitempty"`
+	IPAttr      string    `json:"ip_attr,omitempty"`
+	IPSrc       string    `json:"ip_src,omitempty"`
+	Country     string    `json:"country,omitempty"`
+	City        string    `json:"city,omitempty"`
+	Location    string    `json:"location,omitempty"`
+	ISP         string    `json:"isp,omitempty"`
+	ASN         int64     `json:"asn,omitempty"`
+	FraudScore  string    `json:"fraud_score,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+}
+
 // TimelineEvent represents a single usage event for debug tracking.
 type TimelineEvent struct {
 	Time      time.Time `json:"time"`
@@ -47,6 +69,21 @@ type TimelineEvent struct {
 }
 
 const maxTimelineSize = 20
+const cachedProbeSuccessTTL = 1 * time.Hour
+const cachedProbeFailureRetryTTL = 24 * time.Hour
+const maxProbeLogs = 200
+
+// ProbeLog records a single probe attempt for debug display.
+type ProbeLog struct {
+	Time      time.Time `json:"time"`
+	Tag       string    `json:"tag"`
+	Name      string    `json:"name,omitempty"`
+	Success   bool      `json:"success"`
+	LatencyMs int64     `json:"latency_ms,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Cached    bool      `json:"cached"`
+	Source    string    `json:"source,omitempty"`
+}
 
 // Snapshot is a runtime view of a proxy node.
 type Snapshot struct {
@@ -61,9 +98,12 @@ type Snapshot struct {
 	LastSuccess       time.Time       `json:"last_success,omitempty"`
 	LastProbeLatency  time.Duration   `json:"last_probe_latency,omitempty"`
 	LastLatencyMs     int64           `json:"last_latency_ms"`
+	LastProbeAt       time.Time       `json:"last_probe_at,omitempty"`
+	LastProbeCached   bool            `json:"last_probe_cached,omitempty"`
 	Available         bool            `json:"available"`
 	InitialCheckDone  bool            `json:"initial_check_done"`
 	Timeline          []TimelineEvent `json:"timeline,omitempty"`
+	IPInfo            *IPInfo         `json:"ip_info,omitempty"`
 }
 
 type probeFunc func(ctx context.Context) (time.Duration, error)
@@ -84,11 +124,16 @@ type entry struct {
 	lastFail         time.Time
 	lastOK           time.Time
 	lastProbe        time.Duration
+	lastProbeAt      time.Time
+	lastProbeCached  bool
+	lastIPInfo       time.Time
+	ipInfo           *IPInfo
 	active           atomic.Int32
 	probe            probeFunc
 	release          releaseFunc
 	initialCheckDone bool
 	available        bool
+	owner            *Manager
 	mu               sync.RWMutex
 }
 
@@ -102,6 +147,10 @@ type Manager struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	logger     Logger
+	probeLogMu sync.Mutex
+	probeLogs  []ProbeLog
+	checkDir   string
+	checkMu    sync.Mutex
 }
 
 // Logger interface for logging
@@ -113,11 +162,16 @@ type Logger interface {
 // NewManager constructs a manager and pre-validates the probe target.
 func NewManager(cfg Config) (*Manager, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	checkDir := strings.TrimSpace(cfg.CheckResultDir)
+	if checkDir == "" {
+		checkDir = "checker"
+	}
 	m := &Manager{
-		cfg:    cfg,
-		nodes:  make(map[string]*entry),
-		ctx:    ctx,
-		cancel: cancel,
+		cfg:      cfg,
+		nodes:    make(map[string]*entry),
+		ctx:      ctx,
+		cancel:   cancel,
+		checkDir: checkDir,
 	}
 	if cfg.ProbeTarget != "" {
 		target := cfg.ProbeTarget
@@ -233,21 +287,35 @@ func (m *Manager) probeAllNodes(timeout time.Duration) {
 			latency, err := probe(ctx)
 			cancel()
 
+			now := time.Now()
 			entry.mu.Lock()
 			if err != nil {
 				failedCount.Add(1)
 				entry.lastError = err.Error()
-				entry.lastFail = time.Now()
+				entry.lastFail = now
 				entry.available = false
 				entry.initialCheckDone = true
 			} else {
 				availableCount.Add(1)
-				entry.lastOK = time.Now()
+				entry.lastOK = now
 				entry.lastProbe = latency
 				entry.available = true
 				entry.initialCheckDone = true
 			}
+			entry.lastProbeAt = now
+			entry.lastProbeCached = false
 			entry.mu.Unlock()
+
+			m.addProbeLog(ProbeLog{
+				Time:      now,
+				Tag:       tag,
+				Name:      entry.info.Name,
+				Success:   err == nil,
+				LatencyMs: latency.Milliseconds(),
+				Error:     errString(err),
+				Cached:    false,
+				Source:    "auto",
+			})
 
 			if err != nil && m.logger != nil {
 				m.logger.Warn("probe failed for ", tag, ": ", err)
@@ -285,10 +353,12 @@ func (m *Manager) Register(info NodeInfo) *EntryHandle {
 		e = &entry{
 			info:     info,
 			timeline: make([]TimelineEvent, 0, maxTimelineSize),
+			owner:    m,
 		}
 		m.nodes[info.Tag] = e
 	} else {
 		e.info = info
+		e.owner = m
 	}
 	return &EntryHandle{ref: e}
 }
@@ -359,11 +429,101 @@ func (m *Manager) Probe(ctx context.Context, tag string) (time.Duration, error) 
 	if e.probe == nil {
 		return 0, errors.New("probe not available for this node")
 	}
+	if cached, ok := e.cachedProbe(cachedProbeSuccessTTL); ok {
+		e.mu.Lock()
+		e.lastProbeAt = time.Now()
+		e.lastProbeCached = true
+		name := e.info.Name
+		e.mu.Unlock()
+		m.addProbeLog(ProbeLog{
+			Time:      time.Now(),
+			Tag:       tag,
+			Name:      name,
+			Success:   true,
+			LatencyMs: cached.Milliseconds(),
+			Cached:    true,
+			Source:    "manual",
+		})
+		return cached, nil
+	}
 	latency, err := e.probe(ctx)
+	now := time.Now()
+	e.mu.Lock()
+	e.lastProbeAt = now
+	e.lastProbeCached = false
+	name := e.info.Name
+	lastOK := e.lastOK
+	lastProbe := e.lastProbe
+	hasCache := lastProbe > 0 && !lastOK.IsZero() && hasBotOrShared(e.ipInfo)
+	e.mu.Unlock()
 	if err != nil {
+		m.addProbeLog(ProbeLog{
+			Time:    now,
+			Tag:     tag,
+			Name:    name,
+			Success: false,
+			Error:   err.Error(),
+			Cached:  false,
+			Source:  "manual",
+		})
+		if hasCache {
+			if time.Since(lastOK) > cachedProbeFailureRetryTTL && ctx.Err() == nil {
+				latency2, err2 := e.probe(ctx)
+				now2 := time.Now()
+				e.mu.Lock()
+				e.lastProbeAt = now2
+				e.lastProbeCached = false
+				e.mu.Unlock()
+				if err2 == nil {
+					e.recordProbeLatency(latency2)
+					m.addProbeLog(ProbeLog{
+						Time:      now2,
+						Tag:       tag,
+						Name:      name,
+						Success:   true,
+						LatencyMs: latency2.Milliseconds(),
+						Cached:    false,
+						Source:    "manual",
+					})
+					return latency2, nil
+				}
+				m.addProbeLog(ProbeLog{
+					Time:    now2,
+					Tag:     tag,
+					Name:    name,
+					Success: false,
+					Error:   err2.Error(),
+					Cached:  false,
+					Source:  "manual",
+				})
+			}
+			e.mu.Lock()
+			e.lastProbeAt = time.Now()
+			e.lastProbeCached = true
+			e.mu.Unlock()
+			m.addProbeLog(ProbeLog{
+				Time:      time.Now(),
+				Tag:       tag,
+				Name:      name,
+				Success:   true,
+				LatencyMs: lastProbe.Milliseconds(),
+				Cached:    true,
+				Source:    "fallback",
+			})
+			return lastProbe, nil
+		}
 		return 0, err
 	}
 	e.recordProbeLatency(latency)
+	m.addProbeLog(ProbeLog{
+		Time:      now,
+		Tag:       tag,
+		Name:      name,
+		Success:   true,
+		LatencyMs: latency.Milliseconds(),
+		Cached:    false,
+		Source:    "manual",
+	})
 	return latency, nil
 }
 
@@ -408,6 +568,12 @@ func (e *entry) snapshot() Snapshot {
 		copy(timelineCopy, e.timeline)
 	}
 
+	var ipInfoCopy *IPInfo
+	if e.ipInfo != nil {
+		clone := *e.ipInfo
+		ipInfoCopy = &clone
+	}
+
 	return Snapshot{
 		NodeInfo:          e.info,
 		FailureCount:      e.failure,
@@ -420,9 +586,12 @@ func (e *entry) snapshot() Snapshot {
 		LastSuccess:       e.lastOK,
 		LastProbeLatency:  e.lastProbe,
 		LastLatencyMs:     latencyMs,
+		LastProbeAt:       e.lastProbeAt,
+		LastProbeCached:   e.lastProbeCached,
 		Available:         e.available,
 		InitialCheckDone:  e.initialCheckDone,
 		Timeline:          timelineCopy,
+		IPInfo:            ipInfoCopy,
 	}
 }
 
@@ -512,6 +681,236 @@ func (e *entry) recordProbeLatency(d time.Duration) {
 	e.mu.Unlock()
 }
 
+func (e *entry) cachedProbe(successTTL time.Duration) (time.Duration, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.blacklist {
+		return 0, false
+	}
+	if e.lastProbe <= 0 {
+		return 0, false
+	}
+	if !hasBotOrShared(e.ipInfo) {
+		return 0, false
+	}
+	if e.initialCheckDone && !e.available {
+		return 0, false
+	}
+	if e.lastOK.IsZero() {
+		return 0, false
+	}
+	if !e.lastFail.IsZero() && e.lastFail.After(e.lastOK) {
+		return 0, false
+	}
+	if time.Since(e.lastOK) > successTTL {
+		return 0, false
+	}
+	return e.lastProbe, true
+}
+
+func hasBotOrShared(info *IPInfo) bool {
+	if info == nil {
+		return false
+	}
+	if strings.TrimSpace(info.BotScore) != "" {
+		return true
+	}
+	if strings.TrimSpace(info.SharedUsers) != "" {
+		return true
+	}
+	return false
+}
+
+func (m *Manager) addProbeLog(log ProbeLog) {
+	if log.Time.IsZero() {
+		log.Time = time.Now()
+	}
+	m.probeLogMu.Lock()
+	m.probeLogs = append(m.probeLogs, log)
+	if len(m.probeLogs) > maxProbeLogs {
+		m.probeLogs = m.probeLogs[len(m.probeLogs)-maxProbeLogs:]
+	}
+	m.probeLogMu.Unlock()
+}
+
+func (m *Manager) logCheckResult(info *IPInfo) {
+	if info == nil || strings.TrimSpace(info.IP) == "" {
+		return
+	}
+
+	m.checkMu.Lock()
+	defer m.checkMu.Unlock()
+
+	if err := os.MkdirAll(m.checkDir, 0o755); err != nil {
+		if m.logger != nil {
+			m.logger.Warn("failed to create check dir: ", err)
+		}
+		return
+	}
+
+	now := time.Now()
+	m.cleanupOldCheckResults(now)
+
+	dateStr := now.Format("20060102")
+	filePath := filepath.Join(m.checkDir, dateStr+".csv")
+
+	existingKeys, _ := m.loadCheckResultKeys(filePath)
+
+	record := m.buildCheckRecord(info, now)
+	key := checkRecordKey(record)
+	if _, ok := existingKeys[key]; ok {
+		return
+	}
+
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		if m.logger != nil {
+			m.logger.Warn("failed to open check result file: ", err)
+		}
+		return
+	}
+	defer file.Close()
+
+	if stat, err := file.Stat(); err == nil && stat.Size() == 0 {
+		writer := csv.NewWriter(file)
+		_ = writer.Write(checkResultHeader())
+		writer.Flush()
+	}
+
+	writer := csv.NewWriter(file)
+	_ = writer.Write(record)
+	writer.Flush()
+}
+
+func (m *Manager) cleanupOldCheckResults(now time.Time) {
+	entries, err := os.ReadDir(m.checkDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".csv") || len(name) != len("20060102.csv") {
+			continue
+		}
+		datePart := strings.TrimSuffix(name, ".csv")
+		parsed, err := time.Parse("20060102", datePart)
+		if err != nil {
+			continue
+		}
+		if now.Sub(parsed) > 30*24*time.Hour {
+			_ = os.Remove(filepath.Join(m.checkDir, name))
+		}
+	}
+}
+
+func (m *Manager) loadCheckResultKeys(path string) (map[string]struct{}, error) {
+	keys := map[string]struct{}{}
+	file, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return keys, nil
+		}
+		return keys, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return keys, err
+	}
+
+	for i, row := range records {
+		if i == 0 && len(row) > 0 && row[0] == "ip" {
+			continue
+		}
+		if len(row) < len(checkResultHeader()) {
+			continue
+		}
+		key := checkRecordKey(row)
+		keys[key] = struct{}{}
+	}
+	return keys, nil
+}
+
+func (m *Manager) buildCheckRecord(info *IPInfo, now time.Time) []string {
+	asn := ""
+	if info.ASN != 0 {
+		asn = strconv.FormatInt(info.ASN, 10)
+	}
+	return []string{
+		strings.TrimSpace(info.IP),
+		now.Format(time.RFC3339),
+		strings.TrimSpace(info.Source),
+		strings.TrimSpace(info.PureScore),
+		strings.TrimSpace(info.FraudScore),
+		strings.TrimSpace(info.BotScore),
+		strings.TrimSpace(info.SharedUsers),
+		strings.TrimSpace(info.IPAttr),
+		strings.TrimSpace(info.IPSrc),
+		strings.TrimSpace(info.Country),
+		strings.TrimSpace(info.City),
+		strings.TrimSpace(info.Location),
+		strings.TrimSpace(info.ISP),
+		asn,
+	}
+}
+
+func checkResultHeader() []string {
+	return []string{
+		"ip",
+		"checked_at",
+		"source",
+		"pure_score",
+		"fraud_score",
+		"bot_score",
+		"shared_users",
+		"ip_attr",
+		"ip_src",
+		"country",
+		"city",
+		"location",
+		"isp",
+		"asn",
+	}
+}
+
+func checkRecordKey(record []string) string {
+	if len(record) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(record))
+	for idx, val := range record {
+		if idx == 1 { // skip checked_at
+			continue
+		}
+		parts = append(parts, strings.TrimSpace(val))
+	}
+	return strings.Join(parts, "|")
+}
+
+// ProbeLogs returns recent probe logs (newest first).
+func (m *Manager) ProbeLogs() []ProbeLog {
+	m.probeLogMu.Lock()
+	defer m.probeLogMu.Unlock()
+	if len(m.probeLogs) == 0 {
+		return []ProbeLog{}
+	}
+	out := make([]ProbeLog, len(m.probeLogs))
+	copy(out, m.probeLogs)
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 // RecordFailure updates failure counters.
 func (h *EntryHandle) RecordFailure(err error) {
 	if h == nil || h.ref == nil {
@@ -582,6 +981,35 @@ func (h *EntryHandle) SetRelease(fn func()) {
 		return
 	}
 	h.ref.setRelease(fn)
+}
+
+// SetIPInfo updates IP quality/geo info.
+func (h *EntryHandle) SetIPInfo(info IPInfo) {
+	if h == nil || h.ref == nil {
+		return
+	}
+	info.UpdatedAt = time.Now()
+	h.ref.mu.Lock()
+	h.ref.ipInfo = &info
+	h.ref.lastIPInfo = info.UpdatedAt
+	h.ref.mu.Unlock()
+	if h.ref.owner != nil {
+		h.ref.owner.logCheckResult(&info)
+	}
+}
+
+// IPInfoStale reports whether the IP info should be refreshed.
+func (h *EntryHandle) IPInfoStale(minInterval time.Duration) bool {
+	if h == nil || h.ref == nil {
+		return true
+	}
+	h.ref.mu.RLock()
+	last := h.ref.lastIPInfo
+	h.ref.mu.RUnlock()
+	if last.IsZero() {
+		return true
+	}
+	return time.Since(last) >= minInterval
 }
 
 // MarkInitialCheckDone marks the initial health check as completed.
