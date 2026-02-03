@@ -771,48 +771,58 @@
     }
 
     /* OpenAPI */
-    .api-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    .openapi-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 16px;
-      margin-top: 24px;
-    }
-
-    .api-card {
-      padding: 16px 18px;
+      margin-top: 16px;
+      padding: 12px 16px;
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: 14px;
       background: rgba(255, 255, 255, 0.85);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
-    }
-
-    .api-title {
-      font-weight: 700;
-      font-size: 16px;
-      margin-bottom: 6px;
-    }
-
-    .api-desc {
+      box-shadow: var(--shadow-sm);
+      font-size: 13px;
       color: var(--text-secondary);
-      font-size: 13px;
-      margin-bottom: 10px;
     }
 
-    .api-params {
-      font-size: 13px;
-      color: var(--text-primary);
-      line-height: 1.6;
+    .openapi-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 16px;
+      align-items: center;
     }
 
-    .api-code {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: rgba(0, 0, 0, 0.04);
+    .openapi-links code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.05);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 12px;
-      white-space: pre-wrap;
-      word-break: break-all;
+      color: var(--text-primary);
+    }
+
+    .btn-small {
+      padding: 8px 14px;
+      font-size: 13px;
+    }
+
+    .openapi-embed {
+      margin-top: 18px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      background: #ffffff;
+      box-shadow: var(--shadow-md);
+    }
+
+    .openapi-embed iframe {
+      width: 100%;
+      height: 78vh;
+      min-height: 640px;
+      border: none;
+      display: block;
+      background: #f5f5f7;
     }
 
     /* Node Management */
@@ -1794,142 +1804,19 @@
     <div id="openapiTab" class="tab-content">
       <div class="manage-header">
         <h2>OpenAPI</h2>
-        <p class="manage-desc">可用接口与参数说明（中文字段已统一使用英文参数名）</p>
+        <p class="manage-desc">API 文档与在线调试（OpenAPI: /api/openapi.json）</p>
       </div>
 
-      <div class="api-grid">
-        <div class="api-card">
-          <div class="api-title">GET /api/nodes</div>
-          <div class="api-desc">返回所有节点（含 IP 信息与状态）</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes</div>
+      <div class="openapi-toolbar">
+        <div class="openapi-links">
+          <span>OpenAPI: <code>/api/openapi.json</code></span>
+          <span>在线调试: <code>/docs</code></span>
         </div>
+        <a class="btn btn-secondary btn-small" href="/docs" target="_blank" rel="noopener">在新窗口打开</a>
+      </div>
 
-        <div class="api-card">
-          <div class="api-title">POST /api/auth</div>
-          <div class="api-desc">登录获取 token（如果未设置密码则无需调用）</div>
-          <div class="api-params">Body：{"password":"你的密码"}</div>
-          <div class="api-code">curl -X POST -H "Content-Type: application/json" -d '{"password":"your_password"}' http://127.0.0.1:9090/api/auth</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">GET /api/settings</div>
-          <div class="api-desc">获取运行设置（external_ip / probe_target / skip_cert_verify）</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/settings</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">PUT /api/settings</div>
-          <div class="api-desc">更新运行设置（保存到 config.yaml）</div>
-          <div class="api-params">Body：{"external_ip":"","probe_target":"www.apple.com:80","skip_cert_verify":true}</div>
-          <div class="api-code">curl -X PUT -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" -d '{"external_ip":"","probe_target":"www.apple.com:80","skip_cert_verify":true}' http://127.0.0.1:9090/api/settings</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">GET /api/export</div>
-          <div class="api-desc">导出可用代理池节点（纯文本，每行一个）</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/export</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">GET /api/export/filter</div>
-          <div class="api-desc">按条件筛选并返回代理地址（JSON）</div>
-          <div class="api-params">
-            参数：<br>
-            shared_min / shared_max（共享人数范围）<br>
-            country（国家/地区，支持英文）<br>
-            ip_src（原生/广播）<br>
-            ip_attr（住宅/机房）<br>
-            fraud_max（Fraud Score ≤）<br>
-            pure_max（纯净度 ≤）<br>
-            latency_max（延迟 ≤，ms）
-          </div>
-          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" "http://127.0.0.1:9090/api/export/filter?shared_max=10&amp;country=United%20States&amp;ip_src=原生&amp;fraud_max=50&amp;pure_max=50&amp;latency_max=500"</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">POST /api/nodes/{tag}/probe</div>
-          <div class="api-desc">手动探测单个节点</div>
-          <div class="api-params">参数：路径参数 tag</div>
-          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/&lt;tag&gt;/probe</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">POST /api/nodes/{tag}/release</div>
-          <div class="api-desc">解除节点拉黑</div>
-          <div class="api-params">参数：路径参数 tag</div>
-          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/&lt;tag&gt;/release</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">POST /api/nodes/probe-all</div>
-          <div class="api-desc">批量探测节点（SSE 进度流）</div>
-          <div class="api-params">
-            参数：<br>
-            interval_ms（起始检测间隔）<br>
-            interval_step_ms（每次成功后增加的间隔）<br>
-            max_interval_ms（最大间隔）
-          </div>
-          <div class="api-code">curl -N -X POST -H "Authorization: Bearer &lt;token&gt;" "http://127.0.0.1:9090/api/nodes/probe-all?interval_ms=200&amp;interval_step_ms=100&amp;max_interval_ms=2000"</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">GET /api/debug</div>
-          <div class="api-desc">调试信息与探测日志</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/debug</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">GET /api/nodes/config</div>
-          <div class="api-desc">读取配置节点列表</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/config</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">POST /api/nodes/config</div>
-          <div class="api-desc">新增配置节点</div>
-          <div class="api-params">Body：{"name":"","uri":"","port":0,"username":"","password":""}</div>
-          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" -d '{"name":"node","uri":"vless://..."}' http://127.0.0.1:9090/api/nodes/config</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">PUT /api/nodes/config/{name}</div>
-          <div class="api-desc">更新配置节点</div>
-          <div class="api-params">Body：{"name":"","uri":"","port":0,"username":"","password":""}</div>
-          <div class="api-code">curl -X PUT -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" -d '{"name":"node","uri":"vless://..."}' http://127.0.0.1:9090/api/nodes/config/&lt;name&gt;</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">DELETE /api/nodes/config/{name}</div>
-          <div class="api-desc">删除配置节点</div>
-          <div class="api-params">参数：路径参数 name</div>
-          <div class="api-code">curl -X DELETE -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/nodes/config/&lt;name&gt;</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">POST /api/reload</div>
-          <div class="api-desc">重载配置（中断现有连接）</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/reload</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">GET /api/subscription/status</div>
-          <div class="api-desc">查看订阅刷新状态</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/subscription/status</div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-title">POST /api/subscription/refresh</div>
-          <div class="api-desc">立即刷新订阅</div>
-          <div class="api-params">参数：无</div>
-          <div class="api-code">curl -X POST -H "Authorization: Bearer &lt;token&gt;" http://127.0.0.1:9090/api/subscription/refresh</div>
-        </div>
+      <div class="openapi-embed">
+        <iframe src="/docs" title="Easy Proxies API Docs" loading="lazy"></iframe>
       </div>
     </div><!-- end openapiTab -->
   </div>
@@ -2090,6 +1977,214 @@
     const probeRetryState = new Map();
     const probeInFlight = new Set();
     let isManualProbePending = false;
+    let isProbing = false;
+    const manualProbeConcurrency = 2;
+    const manualProbeIntervalMs = 200;
+    const probeProgressKey = 'easy_proxies_probe_progress_v1';
+    const probeProgressChannelName = 'easy_proxies_probe_progress';
+    const probeProgressStaleMs = 45000;
+    const probeProgressHideMs = 2000;
+    const probeTabId = Math.random().toString(36).slice(2, 10);
+    let probeProgressChannel = null;
+    let probeProgressHideTimer = null;
+    let probeProgressState = {
+      status: 'idle',
+      total: 0,
+      current: 0,
+      success: 0,
+      failed: 0,
+      progress: 0,
+      message: '',
+      updated_at: 0,
+      tab_id: probeTabId
+    };
+
+    function normalizeProbeProgressState(state) {
+      if (!state || typeof state !== 'object') return null;
+      return {
+        status: typeof state.status === 'string' ? state.status : 'idle',
+        total: Number(state.total) || 0,
+        current: Number(state.current) || 0,
+        success: Number(state.success) || 0,
+        failed: Number(state.failed) || 0,
+        progress: Number(state.progress) || 0,
+        message: typeof state.message === 'string' ? state.message : '',
+        updated_at: Number(state.updated_at) || 0,
+        tab_id: typeof state.tab_id === 'string' ? state.tab_id : ''
+      };
+    }
+
+    function isProbeProgressStateStale(state) {
+      if (!state || !state.updated_at) return true;
+      return Date.now() - state.updated_at > probeProgressStaleMs;
+    }
+
+    function loadProbeProgressState() {
+      try {
+        const raw = localStorage.getItem(probeProgressKey);
+        if (!raw) return null;
+        return normalizeProbeProgressState(JSON.parse(raw));
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function persistProbeProgressState(state) {
+      try {
+        localStorage.setItem(probeProgressKey, JSON.stringify(state));
+      } catch (err) {
+        // ignore storage errors
+      }
+      if (probeProgressChannel) {
+        probeProgressChannel.postMessage({ type: 'probe-progress', state });
+      }
+    }
+
+    function applyProbeProgressState(state, options = {}) {
+      const normalized = normalizeProbeProgressState(state);
+      if (!normalized) return;
+      if (probeProgressState.updated_at && normalized.updated_at && normalized.updated_at < probeProgressState.updated_at && !options.force) {
+        return;
+      }
+      probeProgressState = { ...probeProgressState, ...normalized };
+      renderProbeProgress(probeProgressState);
+    }
+
+    function setProbeProgressState(update, options = {}) {
+      const next = normalizeProbeProgressState({
+        ...probeProgressState,
+        ...update,
+        updated_at: Date.now(),
+        tab_id: probeTabId
+      });
+      if (!next) return;
+      probeProgressState = next;
+      renderProbeProgress(probeProgressState);
+      if (options.broadcast) {
+        persistProbeProgressState(probeProgressState);
+      }
+    }
+
+    function clearProbeProgressState(options = {}) {
+      setProbeProgressState({
+        status: 'idle',
+        total: 0,
+        current: 0,
+        success: 0,
+        failed: 0,
+        progress: 0,
+        message: ''
+      }, { broadcast: options.broadcast !== false });
+    }
+
+    function scheduleProbeProgressHide() {
+      if (probeProgressHideTimer) {
+        clearTimeout(probeProgressHideTimer);
+      }
+      const completedAt = probeProgressState.updated_at;
+      probeProgressHideTimer = setTimeout(() => {
+        const stored = loadProbeProgressState();
+        if (stored && stored.updated_at > completedAt && stored.status === 'running' && !isProbeProgressStateStale(stored)) {
+          applyProbeProgressState(stored, { force: true });
+          return;
+        }
+        if (probeProgressState.status === 'complete' && probeProgressState.updated_at === completedAt) {
+          clearProbeProgressState({ broadcast: true });
+        }
+      }, probeProgressHideMs);
+    }
+
+    function renderProbeProgress(state) {
+      const btn = document.getElementById('probeAllBtn');
+      const progressEl = document.getElementById('probeProgress');
+      const progressFill = document.getElementById('probeProgressFill');
+      const progressStats = document.getElementById('probeProgressStats');
+      const successCount = document.getElementById('probeSuccessCount');
+      const failedCount = document.getElementById('probeFailedCount');
+      const currentNode = document.getElementById('probeCurrentNode');
+
+      if (!btn || !progressEl || !progressFill || !progressStats || !successCount || !failedCount || !currentNode) return;
+
+      if (state.status === 'running') {
+        isProbing = true;
+        btn.disabled = true;
+        btn.textContent = '探测中...';
+        progressEl.classList.add('show');
+        progressFill.style.width = `${Math.min(100, state.progress || 0)}%`;
+        progressStats.textContent = `${state.current || 0} / ${state.total || 0}`;
+        successCount.textContent = String(state.success || 0);
+        failedCount.textContent = String(state.failed || 0);
+        currentNode.textContent = state.message || '探测中...';
+        if (probeProgressHideTimer) {
+          clearTimeout(probeProgressHideTimer);
+          probeProgressHideTimer = null;
+        }
+        return;
+      }
+
+      if (state.status === 'complete') {
+        isProbing = false;
+        btn.disabled = false;
+        btn.textContent = '⚡ 探测全部';
+        progressEl.classList.add('show');
+        progressFill.style.width = '100%';
+        progressStats.textContent = `${state.current || state.total || 0} / ${state.total || 0}`;
+        successCount.textContent = String(state.success || 0);
+        failedCount.textContent = String(state.failed || 0);
+        currentNode.textContent = state.message || `完成！成功 ${state.success || 0}，失败 ${state.failed || 0}`;
+        scheduleProbeProgressHide();
+        return;
+      }
+
+      isProbing = false;
+      btn.disabled = false;
+      btn.textContent = '⚡ 探测全部';
+      progressEl.classList.remove('show');
+    }
+
+    function initProbeProgressSync() {
+      if (typeof BroadcastChannel !== 'undefined') {
+        probeProgressChannel = new BroadcastChannel(probeProgressChannelName);
+        probeProgressChannel.addEventListener('message', (event) => {
+          const payload = event.data;
+          if (!payload || payload.type !== 'probe-progress') return;
+          applyProbeProgressState(payload.state);
+        });
+      }
+
+      window.addEventListener('storage', (event) => {
+        if (event.key !== probeProgressKey) return;
+        if (!event.newValue) {
+          applyProbeProgressState({
+            status: 'idle',
+            total: 0,
+            current: 0,
+            success: 0,
+            failed: 0,
+            progress: 0,
+            message: '',
+            updated_at: Date.now()
+          }, { force: true });
+          return;
+        }
+        try {
+          const next = normalizeProbeProgressState(JSON.parse(event.newValue));
+          if (!next) return;
+          applyProbeProgressState(next);
+        } catch (err) {
+          // ignore parse errors
+        }
+      });
+
+      const stored = loadProbeProgressState();
+      if (stored) {
+        if (isProbeProgressStateStale(stored)) {
+          clearProbeProgressState({ broadcast: true });
+        } else {
+          applyProbeProgressState(stored, { force: true });
+        }
+      }
+    }
 
     // 检查是否需要登录
     async function checkAuth() {
@@ -3233,6 +3328,9 @@
       probeInFlight.add(tag);
       const state = getRetryState(tag);
       state.lastAttempt = Date.now();
+      let ok = false;
+      let errorMsg = '';
+      let latencyMs = 0;
       try {
         if (!silent) {
           showToast('正在探测节点 ' + tag + '...', 'success');
@@ -3241,11 +3339,14 @@
         const data = await res.json();
         if (data.error) {
           recordProbeResult(tag, false);
+          errorMsg = data.error;
           if (!silent) {
             showToast('探测失败: ' + data.error, 'error');
           }
         } else {
           recordProbeResult(tag, true);
+          ok = true;
+          latencyMs = Number(data.latency_ms) || 0;
           if (!silent) {
             showToast(`探测成功！延迟: ${data.latency_ms}ms`, 'success');
           }
@@ -3255,6 +3356,7 @@
         }, 500);
       } catch (err) {
         recordProbeResult(tag, false);
+        errorMsg = err.message;
         if (!silent) {
           showToast('探测失败: ' + err.message, 'error');
         }
@@ -3262,10 +3364,99 @@
         probeInFlight.delete(tag);
         applyAndRender();
       }
+      return { ok, error: errorMsg, latencyMs };
     }
 
     function probe(tag) {
       return probeNode(tag, { silent: false });
+    }
+
+    async function runManualProbeBatch(nodes) {
+      if (!nodes || nodes.length === 0) {
+        return { success: 0, failed: 0 };
+      }
+
+      setProbeProgressState({
+        status: 'running',
+        total: nodes.length,
+        current: 0,
+        success: 0,
+        failed: 0,
+        progress: 0,
+        message: '开始探测...'
+      }, { broadcast: true });
+
+      let success = 0;
+      let failed = 0;
+      let index = 0;
+      let active = 0;
+      let lastStartAt = 0;
+      let startTimer = null;
+
+      return await new Promise((resolve) => {
+        const startNext = () => {
+          if (index >= nodes.length && active === 0) {
+            resolve({ success, failed });
+            return;
+          }
+
+          if (active >= manualProbeConcurrency || index >= nodes.length) {
+            return;
+          }
+
+          const now = Date.now();
+          const delay = Math.max(0, manualProbeIntervalMs - (now - lastStartAt));
+          if (delay > 0) {
+            if (!startTimer) {
+              startTimer = setTimeout(() => {
+                startTimer = null;
+                startNext();
+              }, delay);
+            }
+            return;
+          }
+
+          const node = nodes[index++];
+          if (!node || !node.tag) {
+            startNext();
+            return;
+          }
+          active += 1;
+          lastStartAt = Date.now();
+
+          const name = node.name || node.tag;
+          probeNode(node.tag, { silent: false })
+            .then((result) => {
+              if (result && result.ok) {
+                success += 1;
+              } else {
+                failed += 1;
+              }
+              const current = success + failed;
+              const progress = nodes.length ? (current / nodes.length) * 100 : 0;
+              const message = result && result.ok
+                ? `✅ ${name}: ${result.latencyMs || 1}ms`
+                : `❌ ${name}: ${result && result.error ? result.error : '失败'}`;
+              setProbeProgressState({
+                status: 'running',
+                total: nodes.length,
+                current,
+                success,
+                failed,
+                progress,
+                message
+              }, { broadcast: true });
+            })
+            .finally(() => {
+              active -= 1;
+              startNext();
+            });
+
+          startNext();
+        };
+
+        startNext();
+      });
     }
 
     async function probePendingNodes() {
@@ -3273,25 +3464,47 @@
         showToast('探测正在进行中...', 'error');
         return;
       }
-      const pending = allNodes.filter(shouldAutoProbe);
+      const sharedState = loadProbeProgressState();
+      if (sharedState && sharedState.status === 'running' && !isProbeProgressStateStale(sharedState)) {
+        applyProbeProgressState(sharedState, { force: true });
+        showToast('探测正在进行中...', 'error');
+        return;
+      }
+      const pending = allNodes.filter(node => node && node.tag && shouldAutoProbe(node));
       if (pending.length === 0) {
         showToast('暂无待探测节点', 'success');
         return;
       }
       isManualProbePending = true;
       try {
-        for (const node of pending) {
-          if (!node.tag) continue;
-          await probeNode(node.tag, { silent: false });
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
+        const { success, failed } = await runManualProbeBatch(pending);
+        setProbeProgressState({
+          status: 'complete',
+          total: pending.length,
+          current: pending.length,
+          success,
+          failed,
+          progress: 100,
+          message: `完成！成功 ${success}，失败 ${failed}`
+        }, { broadcast: true });
+        showToast(`探测完成！成功 ${success} 个，失败 ${failed} 个`, 'success');
+        setTimeout(refresh, 2000);
       } finally {
         isManualProbePending = false;
+        if (probeProgressState.status === 'running') {
+          clearProbeProgressState({ broadcast: true });
+        }
       }
     }
 
     async function probeCurrentPage() {
       if (isProbing || isManualProbePending) {
+        showToast('探测正在进行中...', 'error');
+        return;
+      }
+      const sharedState = loadProbeProgressState();
+      if (sharedState && sharedState.status === 'running' && !isProbeProgressStateStale(sharedState)) {
+        applyProbeProgressState(sharedState, { force: true });
         showToast('探测正在进行中...', 'error');
         return;
       }
@@ -3308,15 +3521,26 @@
         btn.textContent = '探测中...';
       }
       try {
-        for (const node of targets) {
-          await probeNode(node.tag, { silent: false });
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
+        const { success, failed } = await runManualProbeBatch(targets);
+        setProbeProgressState({
+          status: 'complete',
+          total: targets.length,
+          current: targets.length,
+          success,
+          failed,
+          progress: 100,
+          message: `完成！成功 ${success}，失败 ${failed}`
+        }, { broadcast: true });
+        showToast(`探测完成！成功 ${success} 个，失败 ${failed} 个`, 'success');
+        setTimeout(refresh, 2000);
       } finally {
         isManualProbePending = false;
         if (btn) {
           btn.disabled = false;
           btn.textContent = '本页探测';
+        }
+        if (probeProgressState.status === 'running') {
+          clearProbeProgressState({ broadcast: true });
         }
       }
     }
@@ -3344,33 +3568,30 @@
     }
 
     // 批量探测所有节点
-    let isProbing = false;
     async function probeAllNodes() {
       if (isProbing) {
         showToast('探测正在进行中...', 'error');
         return;
       }
 
-      isProbing = true;
-      const btn = document.getElementById('probeAllBtn');
-      btn.disabled = true;
-      btn.textContent = '探测中...';
+      const sharedState = loadProbeProgressState();
+      if (sharedState && sharedState.status === 'running' && !isProbeProgressStateStale(sharedState)) {
+        applyProbeProgressState(sharedState, { force: true });
+        showToast('探测正在进行中...', 'error');
+        return;
+      }
 
-      // 显示进度条
-      const progressEl = document.getElementById('probeProgress');
-      const progressFill = document.getElementById('probeProgressFill');
-      const progressStats = document.getElementById('probeProgressStats');
-      const successCount = document.getElementById('probeSuccessCount');
-      const failedCount = document.getElementById('probeFailedCount');
-      const currentNode = document.getElementById('probeCurrentNode');
+      setProbeProgressState({
+        status: 'running',
+        total: 0,
+        current: 0,
+        success: 0,
+        failed: 0,
+        progress: 0,
+        message: '准备中...'
+      }, { broadcast: true });
 
-      progressEl.classList.add('show');
-      progressFill.style.width = '0%';
-      progressStats.textContent = '0 / 0';
-      successCount.textContent = '0';
-      failedCount.textContent = '0';
-      currentNode.textContent = '准备中...';
-
+      let hadError = false;
       try {
         const response = await fetch('/api/nodes/probe-all', { method: 'POST' });
         const reader = response.body.getReader();
@@ -3389,7 +3610,7 @@
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6));
-                handleProbeEvent(data);
+                handleProbeEvent(data, { broadcast: true, notify: true });
               } catch (e) {
                 console.error('Parse error:', e);
               }
@@ -3397,46 +3618,79 @@
           }
         }
       } catch (err) {
+        hadError = true;
         showToast('批量探测失败: ' + err.message, 'error');
       } finally {
-        isProbing = false;
-        btn.disabled = false;
-        btn.textContent = '⚡ 探测全部';
-        setTimeout(() => {
-          progressEl.classList.remove('show');
-          refresh();
-        }, 2000);
+        if (probeProgressState.status === 'running') {
+          clearProbeProgressState({ broadcast: true });
+        }
+        if (hadError) {
+          setTimeout(refresh, 2000);
+        }
       }
     }
 
-    function handleProbeEvent(data) {
-      const progressFill = document.getElementById('probeProgressFill');
-      const progressStats = document.getElementById('probeProgressStats');
-      const successCountEl = document.getElementById('probeSuccessCount');
-      const failedCountEl = document.getElementById('probeFailedCount');
-      const currentNode = document.getElementById('probeCurrentNode');
+    function handleProbeEvent(data, options = {}) {
+      if (!data || !data.type) return;
+      const { broadcast = false, notify = false } = options;
 
       switch (data.type) {
-        case 'start':
-          progressStats.textContent = `0 / ${data.total}`;
-          currentNode.textContent = '开始探测...';
+        case 'start': {
+          const total = Number(data.total) || 0;
+          setProbeProgressState({
+            status: 'running',
+            total,
+            current: 0,
+            success: 0,
+            failed: 0,
+            progress: 0,
+            message: '开始探测...'
+          }, { broadcast });
           break;
-        case 'progress':
-          progressFill.style.width = `${data.progress}%`;
-          progressStats.textContent = `${data.current} / ${data.total}`;
-          if (data.error) {
-            failedCountEl.textContent = parseInt(failedCountEl.textContent) + 1;
-            currentNode.textContent = `❌ ${data.name}: ${data.error}`;
-          } else {
-            successCountEl.textContent = parseInt(successCountEl.textContent) + 1;
-            currentNode.textContent = `✅ ${data.name}: ${data.latency}ms`;
+        }
+        case 'progress': {
+          const hasError = !!data.error;
+          let success = probeProgressState.success + (hasError ? 0 : 1);
+          let failed = probeProgressState.failed + (hasError ? 1 : 0);
+          const total = Number.isFinite(data.total) ? data.total : probeProgressState.total;
+          const current = Number.isFinite(data.current) ? data.current : success + failed;
+          if (current > success + failed) {
+            success += current - (success + failed);
+          }
+          const progress = Number.isFinite(data.progress) ? data.progress : (total ? (current / total) * 100 : probeProgressState.progress);
+          const name = data.name || data.tag || '';
+          const message = hasError ? `❌ ${name}: ${data.error}` : `✅ ${name}: ${data.latency}ms`;
+          setProbeProgressState({
+            status: 'running',
+            total,
+            current,
+            success,
+            failed,
+            progress,
+            message
+          }, { broadcast });
+          break;
+        }
+        case 'complete': {
+          const total = Number.isFinite(data.total) ? data.total : probeProgressState.total;
+          const success = Number.isFinite(data.success) ? data.success : probeProgressState.success;
+          const failed = Number.isFinite(data.failed) ? data.failed : probeProgressState.failed;
+          const current = total || success + failed;
+          setProbeProgressState({
+            status: 'complete',
+            total,
+            current,
+            success,
+            failed,
+            progress: 100,
+            message: `完成！成功 ${success}，失败 ${failed}`
+          }, { broadcast });
+          if (notify) {
+            showToast(`探测完成！成功 ${success} 个，失败 ${failed} 个`, 'success');
+            setTimeout(refresh, 2000);
           }
           break;
-        case 'complete':
-          progressFill.style.width = '100%';
-          currentNode.textContent = `完成！成功 ${data.success}，失败 ${data.failed}`;
-          showToast(`探测完成！成功 ${data.success} 个，失败 ${data.failed} 个`, 'success');
-          break;
+        }
       }
     }
 
@@ -4056,6 +4310,7 @@
     // 初始化
     (async function init() {
       setupListControls();
+      initProbeProgressSync();
       window.addEventListener('resize', () => {
         updateStickyOffsets();
       });

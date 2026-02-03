@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -90,6 +89,8 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/docs", s.handleDocs)
+	mux.HandleFunc("/api/openapi.json", s.handleOpenAPIJSON)
 	mux.HandleFunc("/api/auth", s.handleAuth)
 	mux.HandleFunc("/api/settings", s.withAuth(s.handleSettings))
 	mux.HandleFunc("/api/nodes", s.withAuth(s.handleNodes))
@@ -133,6 +134,7 @@ func (s *Server) SetConfig(cfg *config.Config) {
 		s.cfg.ExternalIP = cfg.ExternalIP
 		s.cfg.ProbeTarget = cfg.Management.ProbeTarget
 		s.cfg.SkipCertVerify = cfg.SkipCertVerify
+		s.cfg.APIToken = cfg.Management.APIToken
 	}
 }
 
@@ -214,6 +216,7 @@ func (s *Server) Shutdown(ctx context.Context) {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	s.maybeSetTokenCookie(w)
 	data, err := embeddedFS.ReadFile("assets/index.html")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -221,6 +224,19 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(data)
+}
+
+func (s *Server) handleDocs(w http.ResponseWriter, r *http.Request) {
+	s.maybeSetTokenCookie(w)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(swaggerUIHTML))
+}
+
+func (s *Server) handleOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(openAPISpec())
 }
 
 func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
@@ -354,81 +370,105 @@ func (s *Server) handleProbeAll(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "data: %s\n\n", fmt.Sprintf(`{"type":"start","total":%d}`, total))
 	flusher.Flush()
 
-	intervalMs, hasInterval := parseIntParam(r.URL.Query().Get("interval_ms"))
-	if !hasInterval || intervalMs <= 0 {
-		intervalMs = 200
-	}
-	maxIntervalMs, hasMaxInterval := parseIntParam(r.URL.Query().Get("max_interval_ms"))
-	if !hasMaxInterval || maxIntervalMs <= 0 {
-		maxIntervalMs = 2000
-	}
-	stepMs, hasStep := parseIntParam(r.URL.Query().Get("interval_step_ms"))
-	if !hasStep || stepMs <= 0 {
-		stepMs = 100
+	const (
+		probeConcurrency   = 2
+		probeStartInterval = 200 * time.Millisecond
+	)
+
+	type probeResult struct {
+		snap      Snapshot
+		latencyMs int64
+		err       error
 	}
 
-	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	ctx := r.Context()
+	results := make(chan probeResult, probeConcurrency)
+	sem := make(chan struct{}, probeConcurrency)
+	var wg sync.WaitGroup
+	var lastStart time.Time
 
-	// Probe all nodes sequentially with adaptive interval
-	successCount := 0
-	failedCount := 0
-
-	for i := 0; i < total; i++ {
+	// Probe all nodes with limited concurrency and start interval
+launchLoop:
+	for _, snap := range snapshots {
 		select {
-		case <-r.Context().Done():
-			goto complete
+		case <-ctx.Done():
+			break launchLoop
 		default:
 		}
 
-		snap := snapshots[i]
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		latency, err := s.mgr.Probe(ctx, snap.Tag)
-		cancel()
+		if !lastStart.IsZero() {
+			delay := probeStartInterval - time.Since(lastStart)
+			if delay > 0 {
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
+					break launchLoop
+				}
+			}
+		}
 
-		latencyMs := latency.Milliseconds()
-		if latencyMs == 0 && latency > 0 {
-			latencyMs = 1
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			break launchLoop
+		}
+
+		lastStart = time.Now()
+		wg.Add(1)
+		go func(snap Snapshot) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			ctxProbe, cancel := context.WithTimeout(ctx, 10*time.Second)
+			latency, err := s.mgr.Probe(ctxProbe, snap.Tag)
+			cancel()
+
+			latencyMs := latency.Milliseconds()
+			if latencyMs == 0 && latency > 0 {
+				latencyMs = 1
+			}
+
+			select {
+			case results <- probeResult{snap: snap, latencyMs: latencyMs, err: err}:
+			case <-ctx.Done():
+			}
+		}(snap)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	successCount := 0
+	failedCount := 0
+
+	for res := range results {
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
 
 		errMsg := ""
-		if err != nil {
+		if res.err != nil {
 			failedCount++
-			errMsg = err.Error()
+			errMsg = res.err.Error()
 		} else {
 			successCount++
-			intervalMs += stepMs
-			if intervalMs > maxIntervalMs {
-				intervalMs = maxIntervalMs
-			}
 		}
 
 		current := successCount + failedCount
 		progress := float64(current) / float64(total) * 100
 		eventData := fmt.Sprintf(`{"type":"progress","tag":"%s","name":"%s","latency":%d,"error":"%s","current":%d,"total":%d,"progress":%.1f}`,
-			snap.Tag, snap.Name, latencyMs, errMsg, current, total, progress)
+			res.snap.Tag, res.snap.Name, res.latencyMs, errMsg, current, total, progress)
 		fmt.Fprintf(w, "data: %s\n\n", eventData)
 		flusher.Flush()
-
-		if current >= total {
-			break
-		}
-
-		var delay time.Duration
-		if err != nil {
-			delay = time.Duration(rng.Intn(2000)+1000) * time.Millisecond
-		} else {
-			delay = time.Duration(intervalMs) * time.Millisecond
-		}
-
-		select {
-		case <-r.Context().Done():
-			goto complete
-		case <-time.After(delay):
-		}
 	}
 
-complete:
-
+	if ctx.Err() != nil {
+		return
+	}
 	// Send complete event
 	fmt.Fprintf(w, "data: %s\n\n", fmt.Sprintf(`{"type":"complete","total":%d,"success":%d,"failed":%d}`, total, successCount, failedCount))
 	flusher.Flush()
@@ -441,30 +481,87 @@ func writeJSON(w http.ResponseWriter, payload any) {
 	_ = enc.Encode(payload)
 }
 
-// withAuth 认证中间件，如果配置了密码则需要验证
+func wantsJSON(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format == "json" || format == "application/json" {
+		return true
+	}
+	accept := strings.ToLower(r.Header.Get("Accept"))
+	return strings.Contains(accept, "application/json")
+}
+
+func (s *Server) isTokenValid(token string) bool {
+	if token == "" {
+		return false
+	}
+	if token == s.sessionToken {
+		return true
+	}
+	if strings.TrimSpace(s.cfg.APIToken) != "" && token == s.cfg.APIToken {
+		return true
+	}
+	return false
+}
+
+func (s *Server) isAuthorized(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if cookie, err := r.Cookie("session_token"); err == nil {
+		if s.isTokenValid(cookie.Value) {
+			return true
+		}
+	}
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		if s.isTokenValid(token) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) setTokenCookie(w http.ResponseWriter, token string) {
+	if token == "" {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   86400 * 7, // 7天
+	})
+}
+
+func (s *Server) maybeSetTokenCookie(w http.ResponseWriter) {
+	if s.cfg.Password != "" {
+		return
+	}
+	token := strings.TrimSpace(s.cfg.APIToken)
+	if token == "" {
+		token = s.sessionToken
+	}
+	s.setTokenCookie(w, token)
+}
+
+// withAuth 认证中间件，如果配置了密码或 token 则需要验证
 func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 如果没有配置密码，直接放行
-		if s.cfg.Password == "" {
+		// 如果没有配置密码且没有 token，直接放行
+		if s.cfg.Password == "" && strings.TrimSpace(s.cfg.APIToken) == "" {
 			next(w, r)
 			return
 		}
 
-		// 检查 Cookie 中的 session token
-		cookie, err := r.Cookie("session_token")
-		if err == nil && cookie.Value == s.sessionToken {
+		if s.isAuthorized(r) {
 			next(w, r)
 			return
-		}
-
-		// 检查 Authorization header (Bearer token)
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "" {
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if token == s.sessionToken {
-				next(w, r)
-				return
-			}
 		}
 
 		// 未授权
@@ -475,14 +572,48 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // handleAuth 处理登录认证
 func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request) {
-	// 如果没有配置密码，直接返回成功（不需要token）
-	if s.cfg.Password == "" {
-		writeJSON(w, map[string]any{"message": "无需密码", "no_password": true})
+	apiToken := strings.TrimSpace(s.cfg.APIToken)
+	if apiToken == "" {
+		apiToken = s.sessionToken
+	}
+
+	if r.Method == http.MethodGet {
+		if s.cfg.Password == "" {
+			s.setTokenCookie(w, apiToken)
+			writeJSON(w, map[string]any{
+				"message":     "无需密码",
+				"no_password": true,
+				"token":       apiToken,
+				"api_token":   apiToken,
+			})
+			return
+		}
+		if s.isAuthorized(r) {
+			writeJSON(w, map[string]any{
+				"message":   "已登录",
+				"token":     s.sessionToken,
+				"api_token": apiToken,
+			})
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		writeJSON(w, map[string]any{"error": "未授权，请先登录"})
 		return
 	}
 
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.cfg.Password == "" {
+		s.setTokenCookie(w, apiToken)
+		writeJSON(w, map[string]any{
+			"message":     "无需密码",
+			"no_password": true,
+			"token":       apiToken,
+			"api_token":   apiToken,
+		})
 		return
 	}
 
@@ -504,18 +635,12 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 设置 cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    s.sessionToken,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   86400 * 7, // 7天
-	})
+	s.setTokenCookie(w, s.sessionToken)
 
 	writeJSON(w, map[string]any{
-		"message": "登录成功",
-		"token":   s.sessionToken,
+		"message":   "登录成功",
+		"token":     s.sessionToken,
+		"api_token": apiToken,
 	})
 }
 
@@ -556,6 +681,14 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 			proxyURI = fmt.Sprintf("http://%s:%d", listenAddr, snap.Port)
 		}
 		lines = append(lines, proxyURI)
+	}
+
+	if wantsJSON(r) {
+		writeJSON(w, map[string]any{
+			"count":   len(lines),
+			"proxies": lines,
+		})
+		return
 	}
 
 	// 返回纯文本，每行一个 URI
@@ -782,6 +915,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			"skip_cert_verify": skipCertVerify,
 			"proxy_username":   proxyUser,
 			"proxy_password":   proxyPass,
+			"api_token":        s.cfg.APIToken,
 		})
 	case http.MethodPut:
 		var req struct {

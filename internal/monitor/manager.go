@@ -25,6 +25,7 @@ type Config struct {
 	Listen         string
 	ProbeTarget    string
 	Password       string
+	APIToken       string
 	ProxyUsername  string // 代理池的用户名（用于导出）
 	ProxyPassword  string // 代理池的密码（用于导出）
 	ExternalIP     string // 外部 IP 地址，用于导出时替换 0.0.0.0

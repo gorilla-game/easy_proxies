@@ -1,7 +1,9 @@
 package config
 
 import (
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -64,6 +66,7 @@ type ManagementConfig struct {
 	Listen       string `yaml:"listen"`
 	ProbeTarget  string `yaml:"probe_target"`
 	IPInfoSource string `yaml:"ip_info_source"` // IP 检测源：ping0 / ippure
+	APIToken     string `yaml:"api_token"`      // API 访问 Token（Bearer），为空则自动生成
 	Password     string `yaml:"password"`       // WebUI 访问密码，为空则不需要密码
 }
 
@@ -170,6 +173,11 @@ func (c *Config) normalize() error {
 		c.Management.IPInfoSource = "ping0"
 	} else {
 		c.Management.IPInfoSource = strings.ToLower(strings.TrimSpace(c.Management.IPInfoSource))
+	}
+	if strings.TrimSpace(c.Management.APIToken) == "" {
+		c.Management.APIToken = generateRandomToken(32)
+	} else {
+		c.Management.APIToken = strings.TrimSpace(c.Management.APIToken)
 	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
@@ -412,6 +420,11 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 		c.Management.IPInfoSource = "ping0"
 	} else {
 		c.Management.IPInfoSource = strings.ToLower(strings.TrimSpace(c.Management.IPInfoSource))
+	}
+	if strings.TrimSpace(c.Management.APIToken) == "" {
+		c.Management.APIToken = generateRandomToken(32)
+	} else {
+		c.Management.APIToken = strings.TrimSpace(c.Management.APIToken)
 	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
@@ -1024,6 +1037,17 @@ func (c *Config) SaveSettings() error {
 		return fmt.Errorf("write config: %w", err)
 	}
 	return nil
+}
+
+func generateRandomToken(size int) string {
+	if size <= 0 {
+		size = 32
+	}
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(buf)
 }
 
 // isPortAvailable checks if a port is available for binding.

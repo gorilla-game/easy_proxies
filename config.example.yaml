@@ -6,6 +6,7 @@ management:
   listen: 0.0.0.0:9090
   probe_target: www.apple.com:80
   ip_info_source: ping0  # IP 检测源：ping0(默认) 或 ippure，支持自动降级
+  api_token: ""  # API 认证 Token（Bearer），为空则启动时自动生成
   password: ""  # WebUI 访问密码，为空则不需要密码（可选）
 listener:
   address: 0.0.0.0
