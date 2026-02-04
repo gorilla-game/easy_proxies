@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -27,6 +28,7 @@ type Config struct {
 	Pool                PoolConfig                `yaml:"pool"`
 	Management          ManagementConfig          `yaml:"management"`
 	SubscriptionRefresh SubscriptionRefreshConfig `yaml:"subscription_refresh"`
+	GeoIP               GeoIPConfig               `yaml:"geoip"`
 	Nodes               []NodeConfig              `yaml:"nodes"`
 	NodesFile           string                    `yaml:"nodes_file"`    // 节点文件路径，每行一个 URI
 	Subscriptions       []string                  `yaml:"subscriptions"` // 订阅链接列表
@@ -35,6 +37,16 @@ type Config struct {
 	SkipCertVerify      bool                      `yaml:"skip_cert_verify"` // 全局跳过 SSL 证书验证
 
 	filePath string `yaml:"-"` // 配置文件路径，用于保存
+}
+
+// GeoIPConfig controls GeoIP-based region routing.
+type GeoIPConfig struct {
+	Enabled            bool          `yaml:"enabled"`              // 是否启用 GeoIP 地域分区
+	DatabasePath       string        `yaml:"database_path"`        // GeoLite2-Country.mmdb 文件路径
+	Listen             string        `yaml:"listen"`               // GeoIP 路由监听地址，默认使用 listener 配置
+	Port               uint16        `yaml:"port"`                 // GeoIP 路由监听端口，默认 2323
+	AutoUpdateEnabled  bool          `yaml:"auto_update_enabled"`  // 是否启用自动更新数据库
+	AutoUpdateInterval time.Duration `yaml:"auto_update_interval"` // 自动更新间隔，默认 24 小时
 }
 
 // ListenerConfig defines how the HTTP proxy should listen for clients.
@@ -583,9 +595,18 @@ func loadNodesFromSubscription(subURL string, timeout time.Duration) ([]NodeConf
 	return parseSubscriptionContent(content)
 }
 
-// parseSubscriptionContent tries to parse subscription content in various formats
+// parseSubscriptionContent tries to parse subscription content in various formats (optimized)
 func parseSubscriptionContent(content string) ([]NodeConfig, error) {
 	content = strings.TrimSpace(content)
+
+	// Quick check for YAML format (check first 200 chars for "proxies:")
+	sampleSize := 200
+	if len(content) < sampleSize {
+		sampleSize = len(content)
+	}
+	if strings.Contains(content[:sampleSize], "proxies:") {
+		return parseClashYAML(content)
+	}
 
 	// Check if it's base64 encoded (common for v2ray subscriptions)
 	if isBase64(content) {
@@ -599,11 +620,6 @@ func parseSubscriptionContent(content string) ([]NodeConfig, error) {
 			}
 		}
 		content = string(decoded)
-	}
-
-	// Check if it's YAML (Clash format)
-	if strings.Contains(content, "proxies:") {
-		return parseClashYAML(content)
 	}
 
 	// Parse as plain text (one URI per line)
@@ -637,7 +653,7 @@ func parseNodesFromContent(content string) ([]NodeConfig, error) {
 	return nodes, nil
 }
 
-// isBase64 checks if a string looks like base64 encoded content
+// isBase64 checks if a string looks like base64 encoded content (optimized version)
 func isBase64(s string) bool {
 	// Remove whitespace
 	s = strings.TrimSpace(s)
@@ -645,22 +661,26 @@ func isBase64(s string) bool {
 		return false
 	}
 
-	// Base64 should not contain newlines in the middle (unless it's multi-line base64)
-	// and should only contain valid base64 characters
+	// Remove newlines for checking
 	s = strings.ReplaceAll(s, "\n", "")
 	s = strings.ReplaceAll(s, "\r", "")
 
-	// Check if it contains proxy URI schemes (then it's not base64)
+	// Quick check: if it contains proxy URI schemes, it's not base64
 	if strings.Contains(s, "://") {
 		return false
 	}
 
-	// Try to decode
-	_, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		_, err = base64.RawStdEncoding.DecodeString(s)
+	// Check character set - base64 only contains A-Za-z0-9+/=
+	// This is much faster than trying to decode
+	for _, c := range s {
+		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=') {
+			return false
+		}
 	}
-	return err == nil
+
+	// Length must be multiple of 4 (with padding)
+	return len(s)%4 == 0
 }
 
 // isProxyURI checks if a string is a valid proxy URI
@@ -913,7 +933,7 @@ func (c *Config) SetFilePath(path string) {
 	}
 }
 
-// writeNodesToFile writes nodes to a file (one URI per line).
+// writeNodesToFile writes nodes to a file (one URI per line) with file locking.
 func writeNodesToFile(path string, nodes []NodeConfig) error {
 	var lines []string
 	for _, node := range nodes {
@@ -923,7 +943,8 @@ func writeNodesToFile(path string, nodes []NodeConfig) error {
 	if len(lines) > 0 {
 		content += "\n"
 	}
-	return os.WriteFile(path, []byte(content), 0o644)
+	// Use file locking for safe concurrent writes
+	return writeFileWithLock(path, []byte(content), 0o644)
 }
 
 // SaveNodes persists nodes to their appropriate locations based on source.
@@ -992,7 +1013,8 @@ func (c *Config) SaveNodes() error {
 		if err != nil {
 			return fmt.Errorf("encode config: %w", err)
 		}
-		if err := os.WriteFile(c.filePath, newData, 0o644); err != nil {
+		// Use file locking for safe concurrent writes
+		if err := writeFileWithLock(c.filePath, newData, 0o644); err != nil {
 			return fmt.Errorf("write config: %w", err)
 		}
 	}
@@ -1033,7 +1055,9 @@ func (c *Config) SaveSettings() error {
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
-	if err := os.WriteFile(c.filePath, newData, 0o644); err != nil {
+
+	// Use file locking for safe concurrent writes
+	if err := writeFileWithLock(c.filePath, newData, 0o644); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 	return nil
@@ -1059,4 +1083,43 @@ func isPortAvailable(address string, port uint16) bool {
 	}
 	_ = ln.Close()
 	return true
+}
+
+// File locking helpers
+
+// lockFile acquires an exclusive lock on the file.
+func lockFile(f *os.File) error {
+	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+}
+
+// unlockFile releases the lock on the file.
+func unlockFile(f *os.File) error {
+	return syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+}
+
+// writeFileWithLock writes data to a file with exclusive locking.
+func writeFileWithLock(path string, data []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	// Acquire exclusive lock
+	if err := lockFile(f); err != nil {
+		return fmt.Errorf("lock file: %w", err)
+	}
+	defer unlockFile(f)
+
+	// Write data
+	if _, err := f.Write(data); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+
+	// Ensure data is written to disk
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("sync file: %w", err)
+	}
+
+	return nil
 }

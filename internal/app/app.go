@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"easy_proxies/internal/boxmgr"
 	"easy_proxies/internal/config"
@@ -75,8 +76,33 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	select {
 	case <-ctx.Done():
+		fmt.Println("Context cancelled, initiating graceful shutdown...")
 	case sig := <-sigCh:
-		fmt.Printf("received %s, shutting down\n", sig)
+		fmt.Printf("Received %s, initiating graceful shutdown...\n", sig)
+	}
+
+	// Create shutdown context with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	// Graceful shutdown sequence
+	fmt.Println("Stopping subscription manager...")
+	if subMgr != nil {
+		subMgr.Stop()
+	}
+
+	fmt.Println("Stopping box manager...")
+	if err := boxMgr.Close(); err != nil {
+		fmt.Printf("Error closing box manager: %v\n", err)
+	}
+
+	// Wait for connections to drain
+	fmt.Println("Waiting for connections to drain...")
+	select {
+	case <-time.After(2 * time.Second):
+		fmt.Println("Graceful shutdown completed")
+	case <-shutdownCtx.Done():
+		fmt.Println("Shutdown timeout exceeded, forcing exit")
 	}
 
 	return nil

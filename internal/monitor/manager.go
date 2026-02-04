@@ -41,6 +41,8 @@ type NodeInfo struct {
 	Mode          string `json:"mode"`
 	ListenAddress string `json:"listen_address,omitempty"`
 	Port          uint16 `json:"port,omitempty"`
+	Region        string `json:"region,omitempty"`  // GeoIP region code: "jp", "kr", "us", "hk", "tw", "other"
+	Country       string `json:"country,omitempty"` // Full country name from GeoIP
 }
 
 // IPInfo represents IP quality and geo details collected during probe.

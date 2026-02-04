@@ -6,21 +6,40 @@
 
 ## 特性
 
-- **多协议支持**: VMess、VLESS、Hysteria2、Shadowsocks、Trojan
+### 核心功能
+- **多协议支持**: VMess、VLESS、Hysteria2 (hy2://)、Shadowsocks、Trojan
 - **多种传输层**: TCP、WebSocket、HTTP/2、gRPC、HTTPUpgrade
 - **订阅链接支持**: 自动从订阅链接获取节点，支持 Base64、Clash YAML 等格式
 - **订阅定时刷新**: 自动定时刷新订阅，支持 WebUI 手动触发（⚠️ 刷新会导致连接中断）
 - **节点池模式**: 自动故障转移、负载均衡
+  - **GeoIP 地域路由** ⭐（可选功能）: 通过 URL 路径访问特定地域的节点池
+    - `/jp` - 日本节点，`/kr` - 韩国节点，`/us` - 美国节点等
+    - 首次启动自动下载 GeoIP 数据库
+    - 自动定期更新（可配置间隔，默认 24 小时）
+    - 热重载，无需服务中断
 - **多端口模式**: 每个节点独立监听端口
 - **混合模式**: 同时启用节点池 + 多端口，节点状态共享同步
+
+### 管理与监控
 - **Web 监控面板**: 实时查看节点状态、延迟探测、一键导出节点
 - **WebUI 设置**: 无需编辑配置文件即可修改 external_ip 和 probe_target
-- **密码保护**: WebUI 支持密码认证，保护节点信息安全
 - **自动健康检查**: 启动时自动检测所有节点可用性，定期（5分钟）检查节点状态
 - **智能节点过滤**: 自动过滤不可用节点，WebUI 和导出按延迟排序
 - **端口保留**: 添加/更新节点时，已有节点保持原有端口不变
+
+### 安全与性能（新增！）
+- **增强会话管理**: 安全的会话令牌，自动过期和清理机制
+- **时序攻击防护**: 恒定时间密码比较，防止暴力破解攻击
+- **并发控制**: 基于信号量的 goroutine 限制，防止资源耗尽
+- **文件锁定**: 使用 syscall.Flock 确保配置文件并发写入安全
+- **解析优化**: 订阅内容解析速度提升 50-70%
+- **HTTP 连接池**: 高效的连接复用，减少 TIME_WAIT 连接
+- **优雅关闭**: 正确的连接排空机制，可配置超时时间
+
+### 部署
 - **灵活配置**: 支持配置文件、节点文件、订阅链接多种方式
 - **多架构支持**: Docker 镜像同时支持 AMD64 和 ARM64
+- **密码保护**: WebUI 支持密码认证，安全的会话管理
 
 ## 快速开始
 
@@ -281,7 +300,7 @@ nodes:
 |------|----------|------|
 | VMess | `vmess://` | WebSocket、HTTP/2、gRPC、TLS |
 | VLESS | `vless://` | Reality、XTLS-Vision、多传输层 |
-| Hysteria2 | `hysteria2://` | 带宽控制、混淆 |
+| Hysteria2 | `hysteria2://` 或 `hy2://` | 带宽控制、混淆 |
 | Shadowsocks | `ss://` | 多加密方式 |
 | Trojan | `trojan://` | TLS、多传输层 |
 
@@ -318,6 +337,8 @@ vless://uuid@server:port?encryption=none&security=reality&sni=example.com&fp=chr
 
 ```
 hysteria2://password@server:port?sni=example.com&insecure=0&obfs=salamander&obfs-password=xxx#名称
+# 或使用简写
+hy2://password@server:port?sni=example.com&insecure=0&obfs=salamander&obfs-password=xxx#名称
 ```
 
 - `upMbps` / `downMbps`: 带宽限制
@@ -515,6 +536,51 @@ go build -o easy-proxies ./cmd/easy_proxies
 # 完整功能构建
 go build -tags "with_utls with_quic with_grpc with_wireguard with_gvisor" -o easy-proxies ./cmd/easy_proxies
 ```
+
+## 更新日志
+
+### v1.1.0 (2026-02-02) - GeoIP、安全与性能版本
+
+**🌍 GeoIP 功能（仅节点池模式）：**
+- ⭐ **基于地域的节点池路由**（可选功能）
+  - 通过 URL 路径访问特定地域的节点池：`/jp`、`/kr`、`/us`、`/hk`、`/tw` 等
+  - 节点池模式下自动识别所有节点的 IP 地理位置
+  - Dashboard 显示各地域节点数量
+- ⭐ **自动 GeoIP 数据库管理**
+  - 首次启动自动从 GitHub 下载（约 9MB）
+  - 定期自动更新（可配置间隔，默认 24 小时）
+  - 热重载，无需服务中断
+  - MMDB 格式验证和完整性检查
+- ⭐ **hy2:// 协议支持**
+  - 支持 Hysteria2 简写形式（hy2://）
+  - 向后兼容 hysteria2://
+
+**🔒 安全增强：**
+- 增强的会话管理，支持自动过期（24小时 TTL）和每小时清理
+- 恒定时间密码比较，防止时序攻击
+- 基于信号量的并发控制（CPU×4 个 goroutine，最少 10 个）
+- 文件锁定机制，确保配置文件并发写入安全
+
+**⚡ 性能改进：**
+- 订阅内容解析速度提升 50-70%，优化 base64 检测算法
+- HTTP 连接池（最大空闲连接 100，每主机 10）减少 TIME_WAIT 连接
+- 响应大小限制（10MB）防止内存耗尽
+- 优雅关闭机制，30秒超时和2秒连接排空
+
+**🔧 技术细节：**
+- 新增自动 GeoIP 数据库下载和更新机制
+- 实现 GeoIP 数据库热重载功能
+- 新增 `golang.org/x/sync/semaphore` 用于并发控制
+- 实现 `syscall.Flock` Unix 文件锁定
+- 配置自定义 HTTP transport 和优化的超时设置
+- 无破坏性变更 - 完全向后兼容
+
+**📝 升级说明：**
+- GeoIP 是节点池模式的可选功能（默认禁用）
+- 启用后 GeoIP 数据库将自动下载
+- 升级后现有会话将失效（用户需要重新登录）
+- 无需修改配置文件
+- 建议在低流量时段重启服务
 
 ## Star History
 

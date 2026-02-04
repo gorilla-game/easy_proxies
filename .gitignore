@@ -9,6 +9,10 @@ easy_proxies-*
 config.yaml
 nodes.txt
 
+# GeoIP database (auto-downloaded)
+*.mmdb
+GeoLite2-Country.mmdb
+
 # Logs
 *.log
 

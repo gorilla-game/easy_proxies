@@ -10,8 +10,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"easy_proxies/internal/config"
+	"easy_proxies/internal/geoip"
 	poolout "easy_proxies/internal/outbound/pool"
 
 	C "github.com/sagernet/sing-box/constant"
@@ -27,6 +29,33 @@ func Build(cfg *config.Config) (option.Options, error) {
 	metadata := make(map[string]poolout.MemberMeta)
 	var failedNodes []string
 	usedTags := make(map[string]int) // Track tag usage for uniqueness
+
+	// Initialize GeoIP lookup if enabled
+	var geoLookup *geoip.Lookup
+	if cfg.GeoIP.Enabled && cfg.GeoIP.DatabasePath != "" {
+		var err error
+		// Use auto-update if enabled
+		if cfg.GeoIP.AutoUpdateEnabled {
+			interval := cfg.GeoIP.AutoUpdateInterval
+			if interval == 0 {
+				interval = 24 * time.Hour // Default to 24 hours
+			}
+			geoLookup, err = geoip.NewWithAutoUpdate(cfg.GeoIP.DatabasePath, interval)
+		} else {
+			geoLookup, err = geoip.New(cfg.GeoIP.DatabasePath)
+		}
+		if err != nil {
+			log.Printf("⚠️  GeoIP database load failed: %v (region routing disabled)", err)
+		} else {
+			log.Printf("✅ GeoIP database loaded: %s", cfg.GeoIP.DatabasePath)
+		}
+	}
+
+	// Track nodes by region for GeoIP routing
+	regionMembers := make(map[string][]string)
+	for _, region := range geoip.AllRegions() {
+		regionMembers[region] = []string{}
+	}
 
 	for _, node := range cfg.Nodes {
 		baseTag := sanitizeTag(node.Name)
@@ -64,7 +93,25 @@ func Build(cfg *config.Config) (option.Options, error) {
 			meta.ListenAddress = cfg.Listener.Address
 			meta.Port = cfg.Listener.Port
 		}
+
+		// GeoIP lookup for region classification
+		if geoLookup != nil && geoLookup.IsEnabled() {
+			regionInfo := geoLookup.LookupURI(node.URI)
+			meta.Region = regionInfo.Code
+			meta.Country = regionInfo.Country
+			regionMembers[regionInfo.Code] = append(regionMembers[regionInfo.Code], tag)
+		} else {
+			meta.Region = geoip.RegionOther
+			meta.Country = "Unknown"
+			regionMembers[geoip.RegionOther] = append(regionMembers[geoip.RegionOther], tag)
+		}
+
 		metadata[tag] = meta
+	}
+
+	// Close GeoIP database after lookup
+	if geoLookup != nil {
+		geoLookup.Close()
 	}
 
 	// Check if we have at least one valid node
@@ -77,6 +124,17 @@ func Build(cfg *config.Config) (option.Options, error) {
 		log.Printf("⚠️  %d/%d nodes failed and were skipped: %v", len(failedNodes), len(cfg.Nodes), failedNodes)
 	}
 	log.Printf("✅ Successfully built %d/%d nodes", len(baseOutbounds), len(cfg.Nodes))
+
+	// Log GeoIP region distribution
+	if cfg.GeoIP.Enabled {
+		log.Println("🌍 GeoIP Region Distribution:")
+		for _, region := range geoip.AllRegions() {
+			count := len(regionMembers[region])
+			if count > 0 {
+				log.Printf("   %s %s: %d nodes", geoip.RegionEmoji(region), geoip.RegionName(region), count)
+			}
+		}
+	}
 
 	// Print proxy links for each node
 	printProxyLinks(cfg, metadata)
@@ -177,6 +235,51 @@ func Build(cfg *config.Config) (option.Options, error) {
 		}
 	}
 
+	// Build GeoIP region-based pool outbounds and routing
+	if cfg.GeoIP.Enabled && enablePoolInbound {
+		// Create pool outbound for each region that has nodes
+		for _, region := range geoip.AllRegions() {
+			members := regionMembers[region]
+			if len(members) == 0 {
+				continue
+			}
+
+			// Build metadata for this region's members
+			regionMeta := make(map[string]poolout.MemberMeta)
+			for _, tag := range members {
+				regionMeta[tag] = metadata[tag]
+			}
+
+			regionPoolTag := fmt.Sprintf("pool-%s", region)
+			regionPoolOptions := poolout.Options{
+				Mode:              cfg.Pool.Mode,
+				Members:           members,
+				FailureThreshold:  cfg.Pool.FailureThreshold,
+				BlacklistDuration: cfg.Pool.BlacklistDuration,
+				Metadata:          regionMeta,
+			}
+			outbounds = append(outbounds, option.Outbound{
+				Type:    poolout.Type,
+				Tag:     regionPoolTag,
+				Options: &regionPoolOptions,
+			})
+		}
+
+		// Log GeoIP routing info
+		geoipPort := cfg.GeoIP.Port
+		if geoipPort == 0 {
+			geoipPort = cfg.Listener.Port
+		}
+		geoipListen := cfg.GeoIP.Listen
+		if geoipListen == "" {
+			geoipListen = cfg.Listener.Address
+		}
+		log.Println("🌐 GeoIP Region Routing Enabled:")
+		log.Printf("   Access via: http://%s:%d/{region}", geoipListen, geoipPort)
+		log.Println("   Available regions: /jp, /kr, /us, /hk, /tw, /other")
+		log.Println("   Default (no path): all nodes pool")
+	}
+
 	opts := option.Options{
 		Log:       &option.LogOptions{Level: strings.ToLower(cfg.LogLevel)},
 		Inbounds:  inbounds,
@@ -223,7 +326,7 @@ func buildNodeOutbound(tag, rawURI string, skipCertVerify bool) (option.Outbound
 			return option.Outbound{}, err
 		}
 		return option.Outbound{Type: C.TypeVLESS, Tag: tag, Options: &opts}, nil
-	case "hysteria2":
+	case "hysteria2", "hy2":
 		opts, err := buildHysteria2Options(parsed, skipCertVerify)
 		if err != nil {
 			return option.Outbound{}, err
