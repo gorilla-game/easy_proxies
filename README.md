@@ -161,3 +161,11 @@ When `management.password` is empty, API/UI auth is bypassed.
 go test ./...
 ```
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=jasonwong1991/easy_proxies&type=Date)](https://star-history.com/#jasonwong1991/easy_proxies&Date)
+
+## License
+
+MIT License
+
