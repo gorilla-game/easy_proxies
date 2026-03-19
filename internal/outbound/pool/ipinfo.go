@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	ipInfoHost        = "my.123169.xyz"
+	ipInfoHost        = "my.ippure.com"
+	ipInfoLegacyHost  = "my.123169.xyz"
 	ipInfoPath        = "/v1/info"
 	ipInfoMinInterval = 10 * time.Minute
 	ipInfoTimeout     = 8 * time.Second
@@ -391,11 +392,37 @@ func (p *poolOutbound) fetchScamScore(ctx context.Context, member *memberState, 
 }
 
 func (p *poolOutbound) fetchIppureInfo(ctx context.Context, member *memberState, includeShared bool) (*monitor.IPInfo, error) {
+	info, err := p.fetchIppureInfoFromHost(ctx, member, ipInfoHost)
+	if err != nil && ipInfoLegacyHost != "" {
+		info, legacyErr := p.fetchIppureInfoFromHost(ctx, member, ipInfoLegacyHost)
+		if legacyErr == nil {
+			err = nil
+			if info != nil {
+				info.Source = "ippure"
+			}
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if includeShared {
+		shareCtx, shareCancel := context.WithTimeout(ctx, ping0Timeout)
+		sharedUsers, _ := p.fetchPing0Shared(shareCtx, member)
+		shareCancel()
+		if strings.TrimSpace(sharedUsers) != "" {
+			info.SharedUsers = strings.TrimSpace(sharedUsers)
+			info.SharedStatus = "ok"
+		}
+	}
+	return info, nil
+}
+
+func (p *poolOutbound) fetchIppureInfoFromHost(ctx context.Context, member *memberState, host string) (*monitor.IPInfo, error) {
 	if member == nil || member.outbound == nil {
 		return nil, fmt.Errorf("missing outbound")
 	}
 
-	target := M.ParseSocksaddrHostPort(ipInfoHost, 443)
+	target := M.ParseSocksaddrHostPort(host, 443)
 	conn, err := member.outbound.DialContext(ctx, N.NetworkTCP, target)
 	if err != nil {
 		return nil, err
@@ -403,12 +430,12 @@ func (p *poolOutbound) fetchIppureInfo(ctx context.Context, member *memberState,
 	defer conn.Close()
 
 	_ = conn.SetDeadline(time.Now().Add(ipInfoTimeout))
-	tlsConn := tls.Client(conn, &tls.Config{ServerName: ipInfoHost})
+	tlsConn := tls.Client(conn, &tls.Config{ServerName: host})
 	if err := tlsConn.Handshake(); err != nil {
 		return nil, fmt.Errorf("tls handshake: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+ipInfoHost+ipInfoPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+host+ipInfoPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -438,17 +465,6 @@ func (p *poolOutbound) fetchIppureInfo(ctx context.Context, member *memberState,
 	}
 
 	info := buildIPInfoFromIppurePayload(payload)
-
-	if includeShared {
-		shareCtx, shareCancel := context.WithTimeout(ctx, ping0Timeout)
-		sharedUsers, _ := p.fetchPing0Shared(shareCtx, member)
-		shareCancel()
-		if strings.TrimSpace(sharedUsers) != "" {
-			info.SharedUsers = strings.TrimSpace(sharedUsers)
-			info.SharedStatus = "ok"
-		}
-	}
-
 	return info, nil
 }
 
