@@ -5,12 +5,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	"easy_proxies/internal/monitor"
@@ -34,6 +35,9 @@ const (
 )
 
 var (
+	errPing0Blocked       = errors.New("ping0 blocked")
+	errScamalyticsBlocked = errors.New("scamalytics blocked")
+
 	ping0UsecountAttr = regexp.MustCompile(`usecount="([^"]+)"`)
 	ping0UsecountBar  = regexp.MustCompile(`class="usecountbar"[^>]*>\s*([^<]+)\s*</div>`)
 	ping0IPJS         = regexp.MustCompile(`window\.ip\s*=\s*'([^']+)'`)
@@ -102,10 +106,77 @@ type ippureInfoResponse struct {
 	CountryCode    string      `json:"countryCode"`
 	City           string      `json:"city"`
 	FraudScore     json.Number `json:"fraudScore"`
+	PureScore      json.Number `json:"pureScore"`
+	PurityScore    json.Number `json:"purityScore"`
 	BotScore       json.Number `json:"botScore"`
+	BotScorePct    json.Number `json:"botScorePercent"`
+	BotPercent     json.Number `json:"botPercent"`
 	HumanBotRatio  json.Number `json:"humanBotRatio"`
 	IsResidential  bool        `json:"isResidential"`
 	IsBroadcast    bool        `json:"isBroadcast"`
+}
+
+func percentValue(candidates ...json.Number) string {
+	for _, candidate := range candidates {
+		text := strings.TrimSpace(candidate.String())
+		if text == "" {
+			continue
+		}
+		if !strings.Contains(text, "%") {
+			text += "%"
+		}
+		return text
+	}
+	return ""
+}
+
+func statusFromValue(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return "ok"
+}
+
+func buildIPInfoFromIppurePayload(payload ippureInfoResponse) *monitor.IPInfo {
+	pureScore := percentValue(payload.PureScore, payload.PurityScore)
+	fraudScore := percentValue(payload.FraudScore)
+	botScore := percentValue(payload.BotScore, payload.BotScorePct, payload.BotPercent, payload.HumanBotRatio)
+
+	ipAttr := "机房"
+	if payload.IsResidential {
+		ipAttr = "住宅"
+	}
+
+	ipSrc := "原生"
+	if payload.IsBroadcast {
+		ipSrc = "广播"
+	}
+
+	location := joinLocation(payload.Country, payload.City)
+	info := &monitor.IPInfo{
+		IP:          payload.IP,
+		PureScore:   pureScore,
+		FraudScore:  fraudScore,
+		FraudStatus: statusFromValue(fraudScore),
+		BotScore:    botScore,
+		BotStatus:   statusFromValue(botScore),
+		SharedUsers: "",
+		IPAttr:      ipAttr,
+		IPSrc:       ipSrc,
+		Country:     payload.Country,
+		City:        payload.City,
+		Location:    location,
+		ISP:         payload.ASOrganization,
+		Source:      "ippure",
+	}
+
+	if payload.ASN != "" {
+		if v, err := payload.ASN.Int64(); err == nil {
+			info.ASN = v
+		}
+	}
+
+	return info
 }
 
 func joinLocation(parts ...string) string {
@@ -201,6 +272,7 @@ func (p *poolOutbound) fetchIPInfo(ctx context.Context, member *memberState) (*m
 
 	info := mergeIPInfo(primary, secondary)
 	p.fillScamScore(ctx, member, info)
+	applyIPInfoStatuses(info, ping0Result.err, ippureResult.err)
 	return info, nil
 }
 
@@ -212,12 +284,17 @@ func (p *poolOutbound) fillScamScore(ctx context.Context, member *memberState, i
 	if ip == "" {
 		return
 	}
+	if strings.TrimSpace(info.FraudScore) != "" {
+		info.FraudStatus = "ok"
+		return
+	}
 	tag := ""
 	if member != nil {
 		tag = member.tag
 	}
 	if score, ok := p.cachedScamScore(tag, ip, scamSuccessTTL); ok {
 		info.FraudScore = score
+		info.FraudStatus = "ok"
 		return
 	}
 	scoreCtx, cancel := context.WithTimeout(ctx, scamTimeout)
@@ -226,6 +303,7 @@ func (p *poolOutbound) fillScamScore(ctx context.Context, member *memberState, i
 	if err == nil && strings.TrimSpace(score) != "" {
 		p.storeScamScore(tag, ip, score)
 		info.FraudScore = strings.TrimSpace(score)
+		info.FraudStatus = "ok"
 		return
 	}
 	if cached, lastSuccess, ok := p.scamCacheFallback(tag, ip); ok {
@@ -236,10 +314,18 @@ func (p *poolOutbound) fillScamScore(ctx context.Context, member *memberState, i
 			if retryErr == nil && strings.TrimSpace(retryScore) != "" {
 				p.storeScamScore(tag, ip, retryScore)
 				info.FraudScore = strings.TrimSpace(retryScore)
+				info.FraudStatus = "ok"
 				return
 			}
 		}
 		info.FraudScore = strings.TrimSpace(cached)
+		info.FraudStatus = "ok"
+		return
+	}
+	if errors.Is(err, errScamalyticsBlocked) {
+		info.FraudStatus = "blocked"
+	} else if strings.TrimSpace(info.FraudScore) == "" {
+		info.FraudStatus = "unavailable"
 	}
 }
 
@@ -283,6 +369,9 @@ func (p *poolOutbound) fetchScamScore(ctx context.Context, member *memberState, 
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusForbidden {
+		return "", errScamalyticsBlocked
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("scamalytics status %d", resp.StatusCode)
 	}
@@ -292,6 +381,9 @@ func (p *poolOutbound) fetchScamScore(ctx context.Context, member *memberState, 
 		return "", err
 	}
 	html := string(body)
+	if strings.Contains(html, "cf-error-details") || strings.Contains(html, "you were blocked") || strings.Contains(html, "Attention Required!") {
+		return "", errScamalyticsBlocked
+	}
 	if matches := scamScore.FindStringSubmatch(html); len(matches) > 1 {
 		return strings.TrimSpace(matches[1]), nil
 	}
@@ -345,52 +437,7 @@ func (p *poolOutbound) fetchIppureInfo(ctx context.Context, member *memberState,
 		return nil, err
 	}
 
-	pureScore := ""
-	if payload.FraudScore != "" {
-		pureScore = payload.FraudScore.String() + "%"
-	}
-
-	botScore := ""
-	if payload.BotScore != "" {
-		botScore = strings.TrimSpace(payload.BotScore.String())
-	} else if payload.HumanBotRatio != "" {
-		botScore = strings.TrimSpace(payload.HumanBotRatio.String())
-	}
-	if botScore != "" && !strings.Contains(botScore, "%") {
-		botScore = botScore + "%"
-	}
-
-	ipAttr := "机房"
-	if payload.IsResidential {
-		ipAttr = "住宅"
-	}
-
-	ipSrc := "原生"
-	if payload.IsBroadcast {
-		ipSrc = "广播"
-	}
-
-	location := joinLocation(payload.Country, payload.City)
-	info := &monitor.IPInfo{
-		IP:          payload.IP,
-		PureScore:   pureScore,
-		FraudScore:  pureScore,
-		BotScore:    botScore,
-		SharedUsers: "",
-		IPAttr:      ipAttr,
-		IPSrc:       ipSrc,
-		Country:     payload.Country,
-		City:        payload.City,
-		Location:    location,
-		ISP:         payload.ASOrganization,
-		Source:      "ippure",
-	}
-
-	if payload.ASN != "" {
-		if v, err := payload.ASN.Int64(); err == nil {
-			info.ASN = v
-		}
-	}
+	info := buildIPInfoFromIppurePayload(payload)
 
 	if includeShared {
 		shareCtx, shareCancel := context.WithTimeout(ctx, ping0Timeout)
@@ -398,6 +445,7 @@ func (p *poolOutbound) fetchIppureInfo(ctx context.Context, member *memberState,
 		shareCancel()
 		if strings.TrimSpace(sharedUsers) != "" {
 			info.SharedUsers = strings.TrimSpace(sharedUsers)
+			info.SharedStatus = "ok"
 		}
 	}
 
@@ -421,8 +469,14 @@ func mergeIPInfo(primary, secondary *monitor.IPInfo) *monitor.IPInfo {
 	if strings.TrimSpace(out.BotScore) == "" {
 		out.BotScore = secondary.BotScore
 	}
+	if strings.TrimSpace(out.BotStatus) == "" {
+		out.BotStatus = secondary.BotStatus
+	}
 	if strings.TrimSpace(out.SharedUsers) == "" {
 		out.SharedUsers = secondary.SharedUsers
+	}
+	if strings.TrimSpace(out.SharedStatus) == "" {
+		out.SharedStatus = secondary.SharedStatus
 	}
 	if strings.TrimSpace(out.IPAttr) == "" {
 		out.IPAttr = secondary.IPAttr
@@ -447,6 +501,9 @@ func mergeIPInfo(primary, secondary *monitor.IPInfo) *monitor.IPInfo {
 	}
 	if strings.TrimSpace(out.FraudScore) == "" {
 		out.FraudScore = secondary.FraudScore
+	}
+	if strings.TrimSpace(out.FraudStatus) == "" {
+		out.FraudStatus = secondary.FraudStatus
 	}
 	return &out
 }
@@ -517,10 +574,31 @@ func (p *poolOutbound) fetchPing0HTML(ctx context.Context, member *memberState) 
 	}
 	html := string(body)
 
-	if strings.Contains(html, "Just a moment") || strings.Contains(html, "cf-turnstile") || strings.Contains(html, "challenge-platform") {
-		return "", fmt.Errorf("ping0 blocked")
+	if strings.Contains(html, "Just a moment") || strings.Contains(html, "cf-turnstile") || strings.Contains(html, "challenge-platform") || strings.Contains(html, "AliyunCaptchaConfig") || strings.Contains(html, "onTurnstileSuccess") {
+		return "", errPing0Blocked
 	}
 	return html, nil
+}
+
+func applyIPInfoStatuses(info *monitor.IPInfo, ping0Err, ippureErr error) {
+	if info == nil {
+		return
+	}
+	if strings.TrimSpace(info.FraudScore) != "" {
+		info.FraudStatus = "ok"
+	}
+	if strings.TrimSpace(info.BotScore) != "" {
+		info.BotStatus = "ok"
+	} else if ippureErr == nil {
+		info.BotStatus = "unavailable"
+	}
+	if strings.TrimSpace(info.SharedUsers) != "" {
+		info.SharedStatus = "ok"
+	} else if errors.Is(ping0Err, errPing0Blocked) {
+		info.SharedStatus = "blocked"
+	} else if ping0Err == nil {
+		info.SharedStatus = "unavailable"
+	}
 }
 
 func parsePing0Shared(html string) string {

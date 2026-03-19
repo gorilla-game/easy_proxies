@@ -47,20 +47,23 @@ type NodeInfo struct {
 
 // IPInfo represents IP quality and geo details collected during probe.
 type IPInfo struct {
-	IP          string    `json:"ip,omitempty"`
-	PureScore   string    `json:"pure_score,omitempty"`
-	BotScore    string    `json:"bot_score,omitempty"`
-	SharedUsers string    `json:"shared_users,omitempty"`
-	IPAttr      string    `json:"ip_attr,omitempty"`
-	IPSrc       string    `json:"ip_src,omitempty"`
-	Country     string    `json:"country,omitempty"`
-	City        string    `json:"city,omitempty"`
-	Location    string    `json:"location,omitempty"`
-	ISP         string    `json:"isp,omitempty"`
-	ASN         int64     `json:"asn,omitempty"`
-	FraudScore  string    `json:"fraud_score,omitempty"`
-	Source      string    `json:"source,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	IP           string    `json:"ip,omitempty"`
+	PureScore    string    `json:"pure_score,omitempty"`
+	BotScore     string    `json:"bot_score,omitempty"`
+	BotStatus    string    `json:"bot_status,omitempty"`
+	SharedUsers  string    `json:"shared_users,omitempty"`
+	SharedStatus string    `json:"shared_status,omitempty"`
+	IPAttr       string    `json:"ip_attr,omitempty"`
+	IPSrc        string    `json:"ip_src,omitempty"`
+	Country      string    `json:"country,omitempty"`
+	City         string    `json:"city,omitempty"`
+	Location     string    `json:"location,omitempty"`
+	ISP          string    `json:"isp,omitempty"`
+	ASN          int64     `json:"asn,omitempty"`
+	FraudScore   string    `json:"fraud_score,omitempty"`
+	FraudStatus  string    `json:"fraud_status,omitempty"`
+	Source       string    `json:"source,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
 }
 
 // TimelineEvent represents a single usage event for debug tracking.

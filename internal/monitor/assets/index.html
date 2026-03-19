@@ -2483,7 +2483,6 @@
     }
 
     function getFraudScoreValue(node) {
-      if (getProbeState(node) !== 'ok') return null;
       const info = node.ip_info || {};
       return parsePercent(info.fraud_score);
     }
@@ -2596,22 +2595,22 @@
     }
 
     function getBotDisplayValue(node) {
-      if (getProbeState(node) !== 'ok') return '';
       const info = node.ip_info || {};
       return String(info.bot_score || '').trim();
     }
 
     function getSharedDisplayValue(node) {
-      if (getProbeState(node) !== 'ok') return '';
       const info = node.ip_info || {};
       return String(info.shared_users || '').trim();
     }
 
-    function formatProbeField(value, state) {
-      if (state === 'failed') return '检测失败';
-      if (state === 'untested') return '未检测';
+    function formatProbeField(value, state, status) {
       const text = String(value || '').trim();
-      return text ? text : '—';
+      if (text) return text;
+      if (status === 'blocked') return '源站受限';
+      if (status === 'unavailable') return '暂无数据';
+      if (state === 'untested') return '未检测';
+      return '—';
     }
 
     function updateCountryOptions(nodes) {
@@ -2989,9 +2988,9 @@
         const ipInfo = node.ip_info || {};
         const probeState = getProbeState(node);
         const pureScore = ipInfo.pure_score || '—';
-        const fraudScore = formatProbeField(ipInfo.fraud_score, probeState);
-        const botDisplay = formatProbeField(ipInfo.bot_score, probeState);
-        const sharedUsers = formatProbeField(ipInfo.shared_users, probeState);
+        const fraudScore = formatProbeField(ipInfo.fraud_score, probeState, ipInfo.fraud_status);
+        const botDisplay = formatProbeField(ipInfo.bot_score, probeState, ipInfo.bot_status);
+        const sharedUsers = formatProbeField(ipInfo.shared_users, probeState, ipInfo.shared_status);
         const ipTypeText = ipInfo.ip_attr || '—';
         const ipNativeText = ipInfo.ip_src || '—';
         const countryText = ipInfo.country || (ipInfo.location || '').split(/\s+/).filter(Boolean)[0] || '—';
