@@ -32,7 +32,7 @@ type Config struct {
 	Nodes               []NodeConfig              `yaml:"nodes"`
 	NodesFile           string                    `yaml:"nodes_file"`    // 节点文件路径，每行一个 URI
 	Subscriptions       []string                  `yaml:"subscriptions"` // 订阅链接列表
-	ExternalIP          string                    `yaml:"external_ip"`      // 外部 IP 地址，用于导出时替换 0.0.0.0
+	ExternalIP          string                    `yaml:"external_ip"`   // 外部 IP 地址，用于导出时替换 0.0.0.0
 	LogLevel            string                    `yaml:"log_level"`
 	SkipCertVerify      bool                      `yaml:"skip_cert_verify"` // 全局跳过 SSL 证书验证
 
@@ -291,55 +291,57 @@ func (c *Config) normalize() error {
 		if len(c.Subscriptions) > 0 && c.SubscriptionRefresh.Enabled {
 			log.Printf("⚠️ No nodes loaded yet; waiting for subscription refresh")
 		} else {
-			return errors.New("config.nodes cannot be empty (configure nodes in config or use nodes_file)")
+			log.Printf("ℹ️ No nodes configured yet; starting management UI without proxy nodes")
 		}
 	}
 	portCursor := c.MultiPort.BasePort
-	for idx := range c.Nodes {
-		c.Nodes[idx].Name = strings.TrimSpace(c.Nodes[idx].Name)
-		c.Nodes[idx].URI = strings.TrimSpace(c.Nodes[idx].URI)
+	if len(c.Nodes) > 0 {
+		for idx := range c.Nodes {
+			c.Nodes[idx].Name = strings.TrimSpace(c.Nodes[idx].Name)
+			c.Nodes[idx].URI = strings.TrimSpace(c.Nodes[idx].URI)
 
-		if c.Nodes[idx].URI == "" {
-			return fmt.Errorf("node %d is missing uri", idx)
-		}
+			if c.Nodes[idx].URI == "" {
+				return fmt.Errorf("node %d is missing uri", idx)
+			}
 
-		// Auto-extract name from URI fragment (#name) if not provided
-		if c.Nodes[idx].Name == "" {
-			if parsed, err := url.Parse(c.Nodes[idx].URI); err == nil && parsed.Fragment != "" {
-				// URL decode the fragment to handle encoded characters
-				if decoded, err := url.QueryUnescape(parsed.Fragment); err == nil {
-					c.Nodes[idx].Name = decoded
-				} else {
-					c.Nodes[idx].Name = parsed.Fragment
+			// Auto-extract name from URI fragment (#name) if not provided
+			if c.Nodes[idx].Name == "" {
+				if parsed, err := url.Parse(c.Nodes[idx].URI); err == nil && parsed.Fragment != "" {
+					// URL decode the fragment to handle encoded characters
+					if decoded, err := url.QueryUnescape(parsed.Fragment); err == nil {
+						c.Nodes[idx].Name = decoded
+					} else {
+						c.Nodes[idx].Name = parsed.Fragment
+					}
 				}
 			}
-		}
 
-		// Fallback to default name if still empty
-		if c.Nodes[idx].Name == "" {
-			c.Nodes[idx].Name = fmt.Sprintf("node-%d", idx)
-		}
+			// Fallback to default name if still empty
+			if c.Nodes[idx].Name == "" {
+				c.Nodes[idx].Name = fmt.Sprintf("node-%d", idx)
+			}
 
-		// Auto-assign port in multi-port/hybrid mode, skip occupied ports
-		if c.Nodes[idx].Port == 0 && (c.Mode == "multi-port" || c.Mode == "hybrid") {
-			for !isPortAvailable(c.MultiPort.Address, portCursor) {
-				log.Printf("⚠️  Port %d is in use, trying next port", portCursor)
+			// Auto-assign port in multi-port/hybrid mode, skip occupied ports
+			if c.Nodes[idx].Port == 0 && (c.Mode == "multi-port" || c.Mode == "hybrid") {
+				for !isPortAvailable(c.MultiPort.Address, portCursor) {
+					log.Printf("⚠️  Port %d is in use, trying next port", portCursor)
+					portCursor++
+					if portCursor > 65535 {
+						return fmt.Errorf("no available ports found starting from %d", c.MultiPort.BasePort)
+					}
+				}
+				c.Nodes[idx].Port = portCursor
 				portCursor++
-				if portCursor > 65535 {
-					return fmt.Errorf("no available ports found starting from %d", c.MultiPort.BasePort)
-				}
+			} else if c.Nodes[idx].Port == 0 {
+				c.Nodes[idx].Port = portCursor
+				portCursor++
 			}
-			c.Nodes[idx].Port = portCursor
-			portCursor++
-		} else if c.Nodes[idx].Port == 0 {
-			c.Nodes[idx].Port = portCursor
-			portCursor++
-		}
 
-		if c.Mode == "multi-port" || c.Mode == "hybrid" {
-			if c.Nodes[idx].Username == "" {
-				c.Nodes[idx].Username = c.MultiPort.Username
-				c.Nodes[idx].Password = c.MultiPort.Password
+			if c.Mode == "multi-port" || c.Mode == "hybrid" {
+				if c.Nodes[idx].Username == "" {
+					c.Nodes[idx].Username = c.MultiPort.Username
+					c.Nodes[idx].Password = c.MultiPort.Password
+				}
 			}
 		}
 	}
@@ -459,7 +461,7 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 	}
 
 	if len(c.Nodes) == 0 {
-		return errors.New("config.nodes cannot be empty")
+		return nil
 	}
 
 	// Build set of ports already assigned from portMap
@@ -700,27 +702,27 @@ type clashConfig struct {
 }
 
 type clashProxy struct {
-	Name           string                 `yaml:"name"`
-	Type           string                 `yaml:"type"`
-	Server         string                 `yaml:"server"`
-	Port           int                    `yaml:"port"`
-	UUID           string                 `yaml:"uuid"`
-	Password       string                 `yaml:"password"`
-	Cipher         string                 `yaml:"cipher"`
-	AlterId        int                    `yaml:"alterId"`
-	Network        string                 `yaml:"network"`
-	TLS            bool                   `yaml:"tls"`
-	SkipCertVerify bool                   `yaml:"skip-cert-verify"`
-	ServerName     string                 `yaml:"servername"`
-	SNI            string                 `yaml:"sni"`
-	Flow           string                 `yaml:"flow"`
-	UDP            bool                   `yaml:"udp"`
-	WSOpts         *clashWSOptions        `yaml:"ws-opts"`
-	GrpcOpts       *clashGrpcOptions      `yaml:"grpc-opts"`
-	RealityOpts    *clashRealityOptions   `yaml:"reality-opts"`
-	ClientFingerprint string              `yaml:"client-fingerprint"`
-	Plugin         string                 `yaml:"plugin"`
-	PluginOpts     map[string]interface{} `yaml:"plugin-opts"`
+	Name              string                 `yaml:"name"`
+	Type              string                 `yaml:"type"`
+	Server            string                 `yaml:"server"`
+	Port              int                    `yaml:"port"`
+	UUID              string                 `yaml:"uuid"`
+	Password          string                 `yaml:"password"`
+	Cipher            string                 `yaml:"cipher"`
+	AlterId           int                    `yaml:"alterId"`
+	Network           string                 `yaml:"network"`
+	TLS               bool                   `yaml:"tls"`
+	SkipCertVerify    bool                   `yaml:"skip-cert-verify"`
+	ServerName        string                 `yaml:"servername"`
+	SNI               string                 `yaml:"sni"`
+	Flow              string                 `yaml:"flow"`
+	UDP               bool                   `yaml:"udp"`
+	WSOpts            *clashWSOptions        `yaml:"ws-opts"`
+	GrpcOpts          *clashGrpcOptions      `yaml:"grpc-opts"`
+	RealityOpts       *clashRealityOptions   `yaml:"reality-opts"`
+	ClientFingerprint string                 `yaml:"client-fingerprint"`
+	Plugin            string                 `yaml:"plugin"`
+	PluginOpts        map[string]interface{} `yaml:"plugin-opts"`
 }
 
 type clashWSOptions struct {

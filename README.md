@@ -62,6 +62,8 @@ Edit `config.yaml` to set listen address and credentials, edit `nodes.txt` to ad
 ./start.sh
 ```
 
+`start.sh` bootstraps `config.yaml` from `config.example.yaml` on first run and creates an empty `nodes.txt` if needed, so the WebUI can start even before you add nodes.
+
 Or manually:
 
 ```bash
@@ -483,18 +485,20 @@ subscription_refresh:
 
 ## Docker Deployment
 
-**Method 1: Host Network Mode (Recommended)**
+**Method 1: Port Mapping Mode (Default, Cross-Platform Recommended)**
 
-Use `network_mode: host` for direct host network access:
+Use explicit port mappings for Linux, macOS, and Windows Docker Desktop:
 
 ```yaml
 # docker-compose.yml
 services:
   easy-proxies:
     image: ghcr.io/jasonwong1991/easy_proxies:latest
-    container_name: easy-proxies
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "2323:2323"       # Pool/Hybrid mode entry
+      - "9090:9090"       # Web dashboard
+      - "24000-24200:24000-24200"  # Multi-Port/Hybrid mode
     volumes:
       - ./config.yaml:/etc/easy-proxies/config.yaml
       - ./nodes.txt:/etc/easy-proxies/nodes.txt
@@ -502,29 +506,27 @@ services:
 
 > **Note**: Config files need write permission for WebUI settings. Run `chmod 666 config.yaml nodes.txt` if you encounter permission errors.
 
-> **Advantage**: Container uses host network directly, all ports exposed automatically. Auto port reassignment works seamlessly.
+> **Advantage**: Works reliably on local Docker Desktop and keeps published ports explicit.
 
-**Method 2: Port Mapping Mode**
+> **Tip**: If these host ports are already occupied, override them temporarily when starting compose, for example `EASY_PROXIES_PORT=32323 EASY_PROXIES_WEB_PORT=39090 EASY_PROXIES_MULTI_PORTS=34000-34200:24000-24200 docker compose up -d`.
 
-Manually specify port mappings:
+**Method 2: Host Network Mode (Optional)**
+
+Use `network_mode: host` if you specifically want host networking and your Docker environment supports it well:
 
 ```yaml
 # docker-compose.yml
 services:
   easy-proxies:
     image: ghcr.io/jasonwong1991/easy_proxies:latest
-    container_name: easy-proxies
     restart: unless-stopped
-    ports:
-      - "2323:2323"       # Pool/Hybrid mode entry
-      - "9091:9091"       # Web dashboard
-      - "24000-24200:24000-24200"  # Multi-Port/Hybrid mode
+    network_mode: host
     volumes:
       - ./config.yaml:/etc/easy-proxies/config.yaml
       - ./nodes.txt:/etc/easy-proxies/nodes.txt
 ```
 
-> **Note**: Multi-Port and Hybrid modes require mapping the port range. Map enough ports for your nodes plus some buffer for auto-reassignment.
+> **Note**: Host networking behavior varies by platform. Prefer the default port-mapping compose file when developing locally.
 
 ## Building
 

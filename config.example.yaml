@@ -28,19 +28,20 @@ multi_port:
 # ═══════════════════════════════════════════════════════════════
 
 # 方式 1: 使用 nodes_file（推荐，最简单）
-# 创建一个文本文件，每行一个代理 URI
-# nodes_file: nodes.txt
+# 创建一个文本文件，每行一个代理 URI。
+nodes_file: nodes.txt
 
 # 方式 2: 直接在配置文件中配置（传统方式）
-nodes:
-  # 只需提供 URI，名称会自动从 #后面提取，端口自动分配
-  - uri: "vless://uuid@server:443#节点名称"
-  - uri: "ss://base64@server:8388#🇨🇳中文节点"
-
-  # 也可以手动指定名称和端口
-  - name: tw-vless
-    uri: "vless://test"
-    port: 24001
+# 默认留空，首次启动也能安全进入 WebUI。
+# nodes:
+#   # 只需提供 URI，名称会自动从 #后面提取，端口自动分配
+#   - uri: "vless://uuid@server:443#节点名称"
+#   - uri: "ss://base64@server:8388#中文节点"
+#
+#   # 也可以手动指定名称和端口
+#   - name: tw-vless
+#     uri: "vless://uuid@server:443#节点名称"
+#     port: 24001
 
 # 方式 3: 混合使用（两种方式的节点会合并）
 # nodes_file: nodes.txt

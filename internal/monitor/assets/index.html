@@ -52,6 +52,15 @@
       margin-bottom: 60px;
     }
 
+    .header-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
     .header h1 {
       font-size: 48px;
       font-weight: 700;
@@ -1433,6 +1442,8 @@
       .app { padding: 24px 16px; }
       .header h1 { font-size: 36px; }
       .header p { font-size: 17px; }
+      .header-meta { align-items: stretch; }
+      .header-meta .status-line { width: 100%; justify-content: center; }
       .stats { grid-template-columns: repeat(2, 1fr); }
       .metrics { grid-template-columns: repeat(2, 1fr); }
       .controls { flex-direction: column; }
@@ -1454,7 +1465,7 @@
     <header class="header">
       <h1>Easy Proxies</h1>
       <p>节点监控中心</p>
-      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 20px;">
+      <div class="header-meta">
         <div class="status-line" style="margin-top: 0;">
           <span class="status-dot"></span>
           <span id="lastUpdate">正在加载...</span>

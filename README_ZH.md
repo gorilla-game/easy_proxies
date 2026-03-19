@@ -62,6 +62,8 @@ cp nodes.example nodes.txt
 ./start.sh
 ```
 
+`start.sh` 首次运行时会自动从 `config.example.yaml` 生成 `config.yaml`，并在缺失时创建空的 `nodes.txt`，这样即使还没填节点也能先进入 WebUI。
+
 或手动执行：
 
 ```bash
@@ -484,18 +486,20 @@ subscription_refresh:
 
 ## Docker 部署
 
-**方式一：主机网络模式（推荐）**
+**方式一：端口映射模式（默认推荐，跨平台更稳）**
 
-使用 `network_mode: host` 直接使用主机网络，无需手动映射端口：
+使用显式端口映射，兼容 Linux、macOS 和 Windows 的 Docker Desktop：
 
 ```yaml
 # docker-compose.yml
 services:
   easy-proxies:
     image: ghcr.io/jasonwong1991/easy_proxies:latest
-    container_name: easy-proxies
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "2323:2323"       # 节点池/混合模式入口
+      - "9090:9090"       # Web 监控面板
+      - "24000-24200:24000-24200"  # 多端口/混合模式
     volumes:
       - ./config.yaml:/etc/easy-proxies/config.yaml
       - ./nodes.txt:/etc/easy-proxies/nodes.txt
@@ -503,29 +507,27 @@ services:
 
 > **注意**: 配置文件需要可写权限以支持 WebUI 设置保存。如遇权限问题，请执行 `chmod 666 config.yaml nodes.txt`
 
-> **优点**: 容器直接使用主机网络，所有端口自动对外开放。端口自动重分配功能可完美工作。
+> **优点**: 本地开发环境更稳定，暴露端口也更清晰。
 
-**方式二：端口映射模式**
+> **提示**: 如果宿主机端口已被占用，可以在启动时临时覆盖，例如 `EASY_PROXIES_PORT=32323 EASY_PROXIES_WEB_PORT=39090 EASY_PROXIES_MULTI_PORTS=34000-34200:24000-24200 docker compose up -d`。
 
-手动指定需要映射的端口：
+**方式二：主机网络模式（可选）**
+
+如果你的 Docker 环境对主机网络支持良好，也可以使用 `network_mode: host`：
 
 ```yaml
 # docker-compose.yml
 services:
   easy-proxies:
     image: ghcr.io/jasonwong1991/easy_proxies:latest
-    container_name: easy-proxies
     restart: unless-stopped
-    ports:
-      - "2323:2323"       # 节点池/混合模式入口
-      - "9091:9091"       # Web 监控面板
-      - "24000-24200:24000-24200"  # 多端口/混合模式
+    network_mode: host
     volumes:
       - ./config.yaml:/etc/easy-proxies/config.yaml
       - ./nodes.txt:/etc/easy-proxies/nodes.txt
 ```
 
-> **注意**: 多端口和混合模式需要映射足够的端口范围，建议预留一些缓冲端口用于自动重分配。
+> **注意**: 主机网络在不同平台上的表现差异较大，本地开发优先建议直接使用仓库内默认的端口映射版 compose 配置。
 
 ## 构建
 

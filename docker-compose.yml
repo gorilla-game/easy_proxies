@@ -2,18 +2,17 @@ services:
   easy-proxies:
     build: .
     image: easy_proxies:local
-    container_name: easy-proxies
     restart: unless-stopped
-    # 方式一：使用主机网络模式（推荐，支持端口自动重分配）
-    network_mode: host
-    # 方式二：手动映射端口（注释掉 network_mode，启用下面的 ports）
-    # ports:
-    #   # Pool 模式入口（pool/hybrid 模式使用）
-    #   - "2323:2323"
-    #   # Web 监控面板
-    #   - "9091:9091"
-    #   # Multi-port 端口范围（multi-port/hybrid 模式使用，根据节点数量调整）
-    #   - "24000-24200:24000-24200"
+    # 默认使用端口映射，兼容 Linux/macOS/Windows 的 Docker Desktop。
+    ports:
+      # Pool 模式入口（pool/hybrid 模式使用）
+      - "${EASY_PROXIES_PORT:-2323}:2323"
+      # Web 监控面板
+      - "${EASY_PROXIES_WEB_PORT:-9090}:9090"
+      # Multi-port 端口范围（multi-port/hybrid 模式使用，根据节点数量调整）
+      - "${EASY_PROXIES_MULTI_PORTS:-24000-24200:24000-24200}"
+    # 如需主机网络模式（通常仅 Linux 更合适），可改用：
+    # network_mode: host
     #
     # 支持的运行模式（在 config.yaml 中配置）：
     #   - pool: 单端口代理池，所有节点共享 2323 端口

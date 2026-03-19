@@ -2,6 +2,7 @@
 Dockerfile
 config.yaml
 config*.yml
+!config.example.yaml
 *.md
 bin
 **/node_modules
