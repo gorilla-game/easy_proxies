@@ -159,6 +159,27 @@ func openAPISpec() map[string]any {
 						},
 					},
 				},
+				"BatchNamesRequest": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"names": map[string]any{
+							"type":  "array",
+							"items": map[string]any{"type": "string"},
+						},
+					},
+				},
+				"BatchMutationResponse": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"message": map[string]any{"type": "string"},
+						"success": map[string]any{"type": "integer"},
+						"total":   map[string]any{"type": "integer"},
+						"errors": map[string]any{
+							"type":  "array",
+							"items": map[string]any{"type": "string"},
+						},
+					},
+				},
 				"MessageResponse": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -224,9 +245,9 @@ func openAPISpec() map[string]any {
 					"description": "If no password is set, returns token directly.",
 				},
 				"post": map[string]any{
-					"summary":   "Login to obtain session token",
-					"security":  []any{},
-					"tags":      []string{"auth"},
+					"summary":  "Login to obtain session token",
+					"security": []any{},
+					"tags":     []string{"auth"},
 					"requestBody": map[string]any{
 						"required": true,
 						"content": map[string]any{
@@ -412,6 +433,24 @@ func openAPISpec() map[string]any {
 					"responses": map[string]any{
 						"200": jsonResponse("Deleted", schemaRef("MessageResponse")),
 						"404": jsonResponse("Not found", schemaRef("ErrorResponse")),
+					},
+				},
+			},
+			"/api/nodes/config/batch-delete": map[string]any{
+				"post": map[string]any{
+					"summary": "Delete multiple config nodes",
+					"tags":    []string{"config"},
+					"requestBody": map[string]any{
+						"required": true,
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": schemaRef("BatchNamesRequest"),
+							},
+						},
+					},
+					"responses": map[string]any{
+						"200": jsonResponse("Batch delete result", schemaRef("BatchMutationResponse")),
+						"400": jsonResponse("Bad request", schemaRef("ErrorResponse")),
 					},
 				},
 			},

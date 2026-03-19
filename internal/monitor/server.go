@@ -46,17 +46,17 @@ type SubscriptionRefresher interface {
 
 // SubscriptionStatus represents subscription refresh status.
 type SubscriptionStatus struct {
-	LastRefresh      time.Time `json:"last_refresh"`
-	NextRefresh      time.Time `json:"next_refresh"`
-	NodeCount        int       `json:"node_count"`
-	LastError        string    `json:"last_error,omitempty"`
-	RefreshCount     int       `json:"refresh_count"`
-	IsRefreshing     bool      `json:"is_refreshing"`
-	NodesModified    bool      `json:"nodes_modified"` // True if nodes.txt was modified since last refresh
-	ProgressTotal    int       `json:"progress_total"`
-	ProgressCurrent  int       `json:"progress_current"`
-	ProgressNodes    int       `json:"progress_nodes"`
-	ProgressMessage  string    `json:"progress_message,omitempty"`
+	LastRefresh     time.Time `json:"last_refresh"`
+	NextRefresh     time.Time `json:"next_refresh"`
+	NodeCount       int       `json:"node_count"`
+	LastError       string    `json:"last_error,omitempty"`
+	RefreshCount    int       `json:"refresh_count"`
+	IsRefreshing    bool      `json:"is_refreshing"`
+	NodesModified   bool      `json:"nodes_modified"` // True if nodes.txt was modified since last refresh
+	ProgressTotal   int       `json:"progress_total"`
+	ProgressCurrent int       `json:"progress_current"`
+	ProgressNodes   int       `json:"progress_nodes"`
+	ProgressMessage string    `json:"progress_message,omitempty"`
 }
 
 // Server exposes HTTP endpoints for monitoring.
@@ -95,6 +95,7 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/settings", s.withAuth(s.handleSettings))
 	mux.HandleFunc("/api/nodes", s.withAuth(s.handleNodes))
 	mux.HandleFunc("/api/nodes/config", s.withAuth(s.handleConfigNodes))
+	mux.HandleFunc("/api/nodes/config/batch-delete", s.withAuth(s.handleConfigNodeBatchDelete))
 	mux.HandleFunc("/api/nodes/config/", s.withAuth(s.handleConfigNodeItem))
 	mux.HandleFunc("/api/nodes/probe-all", s.withAuth(s.handleProbeAll))
 	mux.HandleFunc("/api/nodes/", s.withAuth(s.handleNodeAction))
@@ -1017,6 +1018,10 @@ type nodePayload struct {
 	Password string `json:"password"`
 }
 
+type batchNamesPayload struct {
+	Names []string `json:"names"`
+}
+
 func (p nodePayload) toConfig() config.NodeConfig {
 	return config.NodeConfig{
 		Name:     p.Name,
@@ -1025,6 +1030,26 @@ func (p nodePayload) toConfig() config.NodeConfig {
 		Username: p.Username,
 		Password: p.Password,
 	}
+}
+
+func (p batchNamesPayload) normalizedNames() []string {
+	if len(p.Names) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(p.Names))
+	seen := make(map[string]struct{}, len(p.Names))
+	for _, name := range p.Names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	return out
 }
 
 // handleConfigNodes handles GET (list) and POST (create) for config nodes.
@@ -1057,6 +1082,51 @@ func (s *Server) handleConfigNodes(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// handleConfigNodeBatchDelete handles POST for deleting multiple config nodes.
+func (s *Server) handleConfigNodeBatchDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.ensureNodeManager(w) {
+		return
+	}
+
+	var payload batchNamesPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]any{"error": "请求格式错误"})
+		return
+	}
+
+	names := payload.normalizedNames()
+	if len(names) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]any{"error": "至少提供一个有效节点名称"})
+		return
+	}
+
+	errorsList := make([]string, 0)
+	success := 0
+	for _, name := range names {
+		if err := s.nodeMgr.DeleteNode(r.Context(), name); err != nil {
+			errorsList = append(errorsList, fmt.Sprintf("%s: %v", name, err))
+			continue
+		}
+		success++
+	}
+
+	resp := map[string]any{
+		"message": "批量删除完成，请点击重载使配置生效",
+		"success": success,
+		"total":   len(names),
+	}
+	if len(errorsList) > 0 {
+		resp["errors"] = errorsList
+	}
+	writeJSON(w, resp)
 }
 
 // handleConfigNodeItem handles PUT (update) and DELETE for a specific config node.
