@@ -52,15 +52,6 @@
       margin-bottom: 60px;
     }
 
-    .header-meta {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      margin-top: 20px;
-      flex-wrap: wrap;
-    }
-
     .header h1 {
       font-size: 48px;
       font-weight: 700;
@@ -200,6 +191,139 @@
       color: var(--success);
       margin-top: 8px;
       font-weight: 500;
+    }
+
+    .subscription-trend-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .subscription-trend-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sub-error-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 59, 48, 0.45);
+      background: rgba(255, 59, 48, 0.12);
+      color: var(--error);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sub-error-icon:hover {
+      background: rgba(255, 59, 48, 0.2);
+    }
+
+    .sub-error-popover {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      z-index: 80;
+      display: none;
+      width: min(360px, calc(100vw - 64px));
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 59, 48, 0.3);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: var(--shadow-md);
+      text-align: left;
+    }
+
+    .sub-error-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--error);
+      margin-bottom: 4px;
+    }
+
+    .sub-error-text {
+      font-size: 12px;
+      color: var(--text-primary);
+      line-height: 1.45;
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    /* Region Cards */
+    .region-card {
+      cursor: pointer;
+      position: relative;
+    }
+
+    .region-card:hover {
+      border-color: var(--primary);
+    }
+
+    .region-card.active {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+    }
+
+    .region-card .stat-value {
+      font-size: 36px;
+    }
+
+    .region-card .stat-trend {
+      color: var(--text-secondary);
+    }
+
+    /* Region Filter */
+    .region-filter {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .region-btn {
+      padding: 6px 12px;
+      font-size: 13px;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .region-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .region-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    /* Region Badge in Node Card */
+    .region-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(0, 122, 255, 0.1);
+      color: var(--primary);
+      margin-left: 8px;
     }
 
     /* Nodes Grid */
@@ -595,13 +719,14 @@
 
     .loading-overlay {
       position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.35);
-      backdrop-filter: blur(6px);
+      top: 76px;
+      left: 0;
+      right: 0;
       display: none;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      z-index: 1900;
+      z-index: 1200;
+      pointer-events: none;
       animation: fadeIn 0.2s;
     }
 
@@ -610,9 +735,9 @@
     .loading-card {
       background: var(--bg-elevated);
       border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 28px 32px;
-      min-width: 320px;
+      border-radius: 14px;
+      padding: 14px 18px;
+      min-width: 280px;
       text-align: center;
       box-shadow: var(--shadow-md);
     }
@@ -858,6 +983,45 @@
       margin-bottom: 16px;
     }
 
+    .manage-subtabs {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .manage-subtab {
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .manage-subtab:hover {
+      color: var(--text-primary);
+      border-color: rgba(0, 122, 255, 0.35);
+    }
+
+    .manage-subtab.active {
+      background: rgba(0, 122, 255, 0.12);
+      color: var(--primary);
+      border-color: rgba(0, 122, 255, 0.35);
+    }
+
+    .manage-pane {
+      display: none;
+    }
+
+    .manage-pane.active {
+      display: block;
+    }
+
     .btn-warning {
       background: var(--warning);
       color: white;
@@ -944,6 +1108,36 @@
     .config-node-actions {
       display: flex;
       gap: 8px;
+    }
+
+    .subscription-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .subscription-toolbar .input {
+      min-width: 320px;
+      max-width: 760px;
+      flex: 1;
+    }
+
+    .subscription-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .subscription-error {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--error);
     }
 
     .modal-buttons {
@@ -1442,8 +1636,6 @@
       .app { padding: 24px 16px; }
       .header h1 { font-size: 36px; }
       .header p { font-size: 17px; }
-      .header-meta { align-items: stretch; }
-      .header-meta .status-line { width: 100%; justify-content: center; }
       .stats { grid-template-columns: repeat(2, 1fr); }
       .metrics { grid-template-columns: repeat(2, 1fr); }
       .controls { flex-direction: column; }
@@ -1452,8 +1644,11 @@
       .tabs { flex-direction: column; }
       .tab { width: 100%; }
       .manage-actions { flex-direction: column; }
+      .manage-subtabs { flex-direction: column; }
       .config-node-card { flex-direction: column; align-items: stretch; }
       .config-node-actions { justify-content: flex-end; }
+      .subscription-toolbar { flex-direction: column; align-items: stretch; }
+      .subscription-toolbar .input { min-width: 0; max-width: none; width: 100%; }
       .list-toolbar { flex-direction: column; align-items: stretch; }
       .list-filters, .list-actions { width: 100%; }
       .input, .select { width: 100%; }
@@ -1465,7 +1660,7 @@
     <header class="header">
       <h1>Easy Proxies</h1>
       <p>节点监控中心</p>
-      <div class="header-meta">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 20px;">
         <div class="status-line" style="margin-top: 0;">
           <span class="status-dot"></span>
           <span id="lastUpdate">正在加载...</span>
@@ -1539,8 +1734,68 @@
       <div class="stat-card" id="subscriptionCard" style="display: none;">
         <div class="stat-label">订阅状态</div>
         <div class="stat-value" style="font-size: 24px;" id="subscriptionStatus">-</div>
-        <div class="stat-trend" id="subscriptionTrend">未启用</div>
+        <div class="stat-trend subscription-trend-wrap" id="subscriptionTrendWrap">
+          <span class="subscription-trend-text" id="subscriptionTrend">未启用</span>
+          <button
+            type="button"
+            class="sub-error-icon"
+            id="subscriptionErrorIcon"
+            aria-label="查看异常原因"
+            title="查看异常原因"
+            onclick="toggleSubscriptionErrorPopover(event)"
+          >!</button>
+          <div class="sub-error-popover" id="subscriptionErrorPopover">
+            <div class="sub-error-title">异常原因</div>
+            <div class="sub-error-text" id="subscriptionErrorText">-</div>
+          </div>
+        </div>
       </div>
+    </div>
+
+    <!-- GeoIP Region Stats -->
+    <div class="stats" id="regionStats" style="display: none;">
+      <div class="stat-card region-card" data-region="jp">
+        <div class="stat-label">🇯🇵 日本</div>
+        <div class="stat-value" id="regionJP">0</div>
+        <div class="stat-trend" id="regionJPHealthy">0 健康</div>
+      </div>
+      <div class="stat-card region-card" data-region="kr">
+        <div class="stat-label">🇰🇷 韩国</div>
+        <div class="stat-value" id="regionKR">0</div>
+        <div class="stat-trend" id="regionKRHealthy">0 健康</div>
+      </div>
+      <div class="stat-card region-card" data-region="us">
+        <div class="stat-label">🇺🇸 美国</div>
+        <div class="stat-value" id="regionUS">0</div>
+        <div class="stat-trend" id="regionUSHealthy">0 健康</div>
+      </div>
+      <div class="stat-card region-card" data-region="hk">
+        <div class="stat-label">🇭🇰 香港</div>
+        <div class="stat-value" id="regionHK">0</div>
+        <div class="stat-trend" id="regionHKHealthy">0 健康</div>
+      </div>
+      <div class="stat-card region-card" data-region="tw">
+        <div class="stat-label">🇹🇼 台湾</div>
+        <div class="stat-value" id="regionTW">0</div>
+        <div class="stat-trend" id="regionTWHealthy">0 健康</div>
+      </div>
+      <div class="stat-card region-card" data-region="other">
+        <div class="stat-label">🌍 其他</div>
+        <div class="stat-value" id="regionOther">0</div>
+        <div class="stat-trend" id="regionOtherHealthy">0 健康</div>
+      </div>
+    </div>
+
+    <!-- Region Filter -->
+    <div class="region-filter" id="regionFilter" style="display: none; margin-bottom: 16px;">
+      <span style="margin-right: 8px; color: var(--text-secondary);">筛选地域:</span>
+      <button class="btn btn-sm region-btn active" data-region="all" onclick="filterByRegion('all')">全部</button>
+      <button class="btn btn-sm region-btn" data-region="jp" onclick="filterByRegion('jp')">🇯🇵 JP</button>
+      <button class="btn btn-sm region-btn" data-region="kr" onclick="filterByRegion('kr')">🇰🇷 KR</button>
+      <button class="btn btn-sm region-btn" data-region="us" onclick="filterByRegion('us')">🇺🇸 US</button>
+      <button class="btn btn-sm region-btn" data-region="hk" onclick="filterByRegion('hk')">🇭🇰 HK</button>
+      <button class="btn btn-sm region-btn" data-region="tw" onclick="filterByRegion('tw')">🇹🇼 TW</button>
+      <button class="btn btn-sm region-btn" data-region="other" onclick="filterByRegion('other')">🌍 Other</button>
     </div>
 
     <div class="list-toolbar">
@@ -1731,38 +1986,71 @@
         <p class="manage-desc">添加、编辑或删除代理节点。修改后需点击"重载配置"使更改生效。</p>
       </div>
 
-      <div class="manage-actions">
-        <button class="btn btn-primary" onclick="showAddNodeModal()">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <div class="manage-subtabs">
+        <button type="button" class="manage-subtab active" data-manage-tab="nodes" onclick="switchManageSubTab('nodes')">节点管理</button>
+        <button type="button" class="manage-subtab" data-manage-tab="subscriptions" onclick="switchManageSubTab('subscriptions')">订阅管理</button>
+      </div>
+
+      <div id="manageNodesPane" class="manage-pane active">
+        <div class="manage-actions">
+          <button class="btn btn-primary" onclick="showAddNodeModal()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            添加节点
+          </button>
+          <button class="btn btn-danger" onclick="deleteAllNodes()" id="deleteAllNodesBtn">
+            🗑️ 删除所有节点
+          </button>
+          <button class="btn btn-warning" onclick="triggerReload()" id="reloadBtn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M13.65 2.35A7.958 7.958 0 0 0 8 0C3.58 0 0 3.58 0 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L9 7h7V0l-2.35 2.35z" fill="currentColor"/>
+            </svg>
+            重载配置
+          </button>
+        </div>
+
+        <div class="reload-warning">
+          ⚠️ 重载配置会中断所有现有连接，请谨慎操作
+        </div>
+
+        <div id="subscriptionWarning" class="reload-warning" style="display: none; background: rgba(255, 59, 48, 0.1); border-color: rgba(255, 59, 48, 0.3); color: var(--error);">
+          ⚠️ 当前使用订阅模式：您的修改会保存到 nodes.txt，但下次刷新订阅时将被覆盖
+        </div>
+
+        <div id="configNodesContainer" class="config-nodes-grid"></div>
+
+        <div id="configEmptyState" class="empty" style="display: none;">
+          <svg width="64" height="64" viewBox="0 0 64 64" fill="none" opacity="0.2">
+            <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="4"/>
+            <path d="M32 16v32M16 32h32" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
           </svg>
-          添加节点
-        </button>
-        <button class="btn btn-warning" onclick="triggerReload()" id="reloadBtn">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M13.65 2.35A7.958 7.958 0 0 0 8 0C3.58 0 0 3.58 0 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L9 7h7V0l-2.35 2.35z" fill="currentColor"/>
+          <h3>暂无配置节点</h3>
+          <p>点击"添加节点"开始配置</p>
+        </div>
+      </div>
+
+      <div id="manageSubscriptionsPane" class="manage-pane">
+        <div class="subscription-toolbar">
+          <input id="newSubscriptionUrl" class="input" type="url" placeholder="输入订阅链接，例如 https://example.com/subscription" />
+          <button class="btn btn-primary" id="addSubBtn" onclick="addSubscription()">
+            添加订阅
+          </button>
+          <button class="btn btn-secondary" id="refreshSubManageBtn" onclick="refreshSubscription()">
+            重新拉取节点
+          </button>
+        </div>
+
+        <div id="subscriptionsContainer" class="config-nodes-grid"></div>
+
+        <div id="subscriptionsEmptyState" class="empty" style="display: none;">
+          <svg width="64" height="64" viewBox="0 0 64 64" fill="none" opacity="0.2">
+            <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="4"/>
+            <path d="M32 16v32M16 32h32" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
           </svg>
-          重载配置
-        </button>
-      </div>
-
-      <div class="reload-warning">
-        ⚠️ 重载配置会中断所有现有连接，请谨慎操作
-      </div>
-
-      <div id="subscriptionWarning" class="reload-warning" style="display: none; background: rgba(255, 59, 48, 0.1); border-color: rgba(255, 59, 48, 0.3); color: var(--error);">
-        ⚠️ 当前使用订阅模式：您的修改会保存到 nodes.txt，但下次刷新订阅时将被覆盖
-      </div>
-
-      <div id="configNodesContainer" class="config-nodes-grid"></div>
-
-      <div id="configEmptyState" class="empty" style="display: none;">
-        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" opacity="0.2">
-          <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="4"/>
-          <path d="M32 16v32M16 32h32" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-        </svg>
-        <h3>暂无配置节点</h3>
-        <p>点击"添加节点"开始配置</p>
+          <h3>暂无订阅</h3>
+          <p>添加订阅后可在此处管理并重新拉取节点</p>
+        </div>
       </div>
     </div><!-- end manageTab -->
 
@@ -1967,6 +2255,7 @@
     let listState = {
       search: '',
       status: 'all',
+      region: 'all',
       mode: 'all',
       country: 'all',
       ipType: 'all',
@@ -1988,214 +2277,6 @@
     const probeRetryState = new Map();
     const probeInFlight = new Set();
     let isManualProbePending = false;
-    let isProbing = false;
-    const manualProbeConcurrency = 2;
-    const manualProbeIntervalMs = 200;
-    const probeProgressKey = 'easy_proxies_probe_progress_v1';
-    const probeProgressChannelName = 'easy_proxies_probe_progress';
-    const probeProgressStaleMs = 45000;
-    const probeProgressHideMs = 2000;
-    const probeTabId = Math.random().toString(36).slice(2, 10);
-    let probeProgressChannel = null;
-    let probeProgressHideTimer = null;
-    let probeProgressState = {
-      status: 'idle',
-      total: 0,
-      current: 0,
-      success: 0,
-      failed: 0,
-      progress: 0,
-      message: '',
-      updated_at: 0,
-      tab_id: probeTabId
-    };
-
-    function normalizeProbeProgressState(state) {
-      if (!state || typeof state !== 'object') return null;
-      return {
-        status: typeof state.status === 'string' ? state.status : 'idle',
-        total: Number(state.total) || 0,
-        current: Number(state.current) || 0,
-        success: Number(state.success) || 0,
-        failed: Number(state.failed) || 0,
-        progress: Number(state.progress) || 0,
-        message: typeof state.message === 'string' ? state.message : '',
-        updated_at: Number(state.updated_at) || 0,
-        tab_id: typeof state.tab_id === 'string' ? state.tab_id : ''
-      };
-    }
-
-    function isProbeProgressStateStale(state) {
-      if (!state || !state.updated_at) return true;
-      return Date.now() - state.updated_at > probeProgressStaleMs;
-    }
-
-    function loadProbeProgressState() {
-      try {
-        const raw = localStorage.getItem(probeProgressKey);
-        if (!raw) return null;
-        return normalizeProbeProgressState(JSON.parse(raw));
-      } catch (err) {
-        return null;
-      }
-    }
-
-    function persistProbeProgressState(state) {
-      try {
-        localStorage.setItem(probeProgressKey, JSON.stringify(state));
-      } catch (err) {
-        // ignore storage errors
-      }
-      if (probeProgressChannel) {
-        probeProgressChannel.postMessage({ type: 'probe-progress', state });
-      }
-    }
-
-    function applyProbeProgressState(state, options = {}) {
-      const normalized = normalizeProbeProgressState(state);
-      if (!normalized) return;
-      if (probeProgressState.updated_at && normalized.updated_at && normalized.updated_at < probeProgressState.updated_at && !options.force) {
-        return;
-      }
-      probeProgressState = { ...probeProgressState, ...normalized };
-      renderProbeProgress(probeProgressState);
-    }
-
-    function setProbeProgressState(update, options = {}) {
-      const next = normalizeProbeProgressState({
-        ...probeProgressState,
-        ...update,
-        updated_at: Date.now(),
-        tab_id: probeTabId
-      });
-      if (!next) return;
-      probeProgressState = next;
-      renderProbeProgress(probeProgressState);
-      if (options.broadcast) {
-        persistProbeProgressState(probeProgressState);
-      }
-    }
-
-    function clearProbeProgressState(options = {}) {
-      setProbeProgressState({
-        status: 'idle',
-        total: 0,
-        current: 0,
-        success: 0,
-        failed: 0,
-        progress: 0,
-        message: ''
-      }, { broadcast: options.broadcast !== false });
-    }
-
-    function scheduleProbeProgressHide() {
-      if (probeProgressHideTimer) {
-        clearTimeout(probeProgressHideTimer);
-      }
-      const completedAt = probeProgressState.updated_at;
-      probeProgressHideTimer = setTimeout(() => {
-        const stored = loadProbeProgressState();
-        if (stored && stored.updated_at > completedAt && stored.status === 'running' && !isProbeProgressStateStale(stored)) {
-          applyProbeProgressState(stored, { force: true });
-          return;
-        }
-        if (probeProgressState.status === 'complete' && probeProgressState.updated_at === completedAt) {
-          clearProbeProgressState({ broadcast: true });
-        }
-      }, probeProgressHideMs);
-    }
-
-    function renderProbeProgress(state) {
-      const btn = document.getElementById('probeAllBtn');
-      const progressEl = document.getElementById('probeProgress');
-      const progressFill = document.getElementById('probeProgressFill');
-      const progressStats = document.getElementById('probeProgressStats');
-      const successCount = document.getElementById('probeSuccessCount');
-      const failedCount = document.getElementById('probeFailedCount');
-      const currentNode = document.getElementById('probeCurrentNode');
-
-      if (!btn || !progressEl || !progressFill || !progressStats || !successCount || !failedCount || !currentNode) return;
-
-      if (state.status === 'running') {
-        isProbing = true;
-        btn.disabled = true;
-        btn.textContent = '探测中...';
-        progressEl.classList.add('show');
-        progressFill.style.width = `${Math.min(100, state.progress || 0)}%`;
-        progressStats.textContent = `${state.current || 0} / ${state.total || 0}`;
-        successCount.textContent = String(state.success || 0);
-        failedCount.textContent = String(state.failed || 0);
-        currentNode.textContent = state.message || '探测中...';
-        if (probeProgressHideTimer) {
-          clearTimeout(probeProgressHideTimer);
-          probeProgressHideTimer = null;
-        }
-        return;
-      }
-
-      if (state.status === 'complete') {
-        isProbing = false;
-        btn.disabled = false;
-        btn.textContent = '⚡ 探测全部';
-        progressEl.classList.add('show');
-        progressFill.style.width = '100%';
-        progressStats.textContent = `${state.current || state.total || 0} / ${state.total || 0}`;
-        successCount.textContent = String(state.success || 0);
-        failedCount.textContent = String(state.failed || 0);
-        currentNode.textContent = state.message || `完成！成功 ${state.success || 0}，失败 ${state.failed || 0}`;
-        scheduleProbeProgressHide();
-        return;
-      }
-
-      isProbing = false;
-      btn.disabled = false;
-      btn.textContent = '⚡ 探测全部';
-      progressEl.classList.remove('show');
-    }
-
-    function initProbeProgressSync() {
-      if (typeof BroadcastChannel !== 'undefined') {
-        probeProgressChannel = new BroadcastChannel(probeProgressChannelName);
-        probeProgressChannel.addEventListener('message', (event) => {
-          const payload = event.data;
-          if (!payload || payload.type !== 'probe-progress') return;
-          applyProbeProgressState(payload.state);
-        });
-      }
-
-      window.addEventListener('storage', (event) => {
-        if (event.key !== probeProgressKey) return;
-        if (!event.newValue) {
-          applyProbeProgressState({
-            status: 'idle',
-            total: 0,
-            current: 0,
-            success: 0,
-            failed: 0,
-            progress: 0,
-            message: '',
-            updated_at: Date.now()
-          }, { force: true });
-          return;
-        }
-        try {
-          const next = normalizeProbeProgressState(JSON.parse(event.newValue));
-          if (!next) return;
-          applyProbeProgressState(next);
-        } catch (err) {
-          // ignore parse errors
-        }
-      });
-
-      const stored = loadProbeProgressState();
-      if (stored) {
-        if (isProbeProgressStateStale(stored)) {
-          clearProbeProgressState({ broadcast: true });
-        } else {
-          applyProbeProgressState(stored, { force: true });
-        }
-      }
-    }
 
     // 检查是否需要登录
     async function checkAuth() {
@@ -2483,6 +2564,7 @@
     }
 
     function getFraudScoreValue(node) {
+      if (getProbeState(node) !== 'ok') return null;
       const info = node.ip_info || {};
       return parsePercent(info.fraud_score);
     }
@@ -2595,22 +2677,22 @@
     }
 
     function getBotDisplayValue(node) {
+      if (getProbeState(node) !== 'ok') return '';
       const info = node.ip_info || {};
       return String(info.bot_score || '').trim();
     }
 
     function getSharedDisplayValue(node) {
+      if (getProbeState(node) !== 'ok') return '';
       const info = node.ip_info || {};
       return String(info.shared_users || '').trim();
     }
 
-    function formatProbeField(value, state, status) {
-      const text = String(value || '').trim();
-      if (text) return text;
-      if (status === 'blocked') return '源站受限';
-      if (status === 'unavailable') return '暂无数据';
+    function formatProbeField(value, state, fallback) {
+      if (state === 'failed') return '检测失败';
       if (state === 'untested') return '未检测';
-      return '—';
+      const text = String(value || '').trim();
+      return text ? text : (fallback || '—');
     }
 
     function updateCountryOptions(nodes) {
@@ -2759,6 +2841,7 @@
         const status = getNodeStatus(node);
         if (listState.hideBlacklisted && node.blacklisted) return false;
         if (listState.status !== 'all' && status !== listState.status) return false;
+        if (listState.region !== 'all' && (node.region || 'other') !== listState.region) return false;
         if (listState.mode !== 'all' && (node.mode || '').toLowerCase() !== listState.mode) return false;
         if (listState.country !== 'all' && getNodeCountry(node) !== listState.country) return false;
         if (listState.ipType !== 'all' && getNodeIpType(node) !== listState.ipType) return false;
@@ -2988,9 +3071,10 @@
         const ipInfo = node.ip_info || {};
         const probeState = getProbeState(node);
         const pureScore = ipInfo.pure_score || '—';
-        const fraudScore = formatProbeField(ipInfo.fraud_score, probeState, ipInfo.fraud_status);
-        const botDisplay = formatProbeField(ipInfo.bot_score, probeState, ipInfo.bot_status);
-        const sharedUsers = formatProbeField(ipInfo.shared_users, probeState, ipInfo.shared_status);
+        const fraudScore = formatProbeField(ipInfo.fraud_score, probeState);
+        const botFallback = (!ipInfo.bot_score && (ipInfo.source === 'ippure' || ipInfo.fraud_score || ipInfo.pure_score)) ? '源站未返回' : '';
+        const botDisplay = formatProbeField(ipInfo.bot_score, probeState, botFallback);
+        const sharedUsers = formatProbeField(ipInfo.shared_users, probeState);
         const ipTypeText = ipInfo.ip_attr || '—';
         const ipNativeText = ipInfo.ip_src || '—';
         const countryText = ipInfo.country || (ipInfo.location || '').split(/\s+/).filter(Boolean)[0] || '—';
@@ -3261,6 +3345,7 @@
         clearFiltersBtn.addEventListener('click', () => {
           listState.search = '';
           listState.status = 'all';
+          listState.region = 'all';
           listState.mode = 'all';
           listState.country = 'all';
           listState.ipType = 'all';
@@ -3292,6 +3377,7 @@
           sortDirBtn.textContent = listState.sortDir === 'asc' ? '升序' : '降序';
           hideBlacklisted.checked = false;
 
+          syncRegionFilterUI();
           applyAndRender();
         });
       }
@@ -3315,9 +3401,9 @@
         }
         if (!res.ok) throw new Error('请求失败');
         const data = await res.json();
-        const nodes = data.nodes || [];
+        const nodes = data.all_nodes || data.nodes || [];
         render(nodes);
-        updateStats(nodes);
+        updateStats({ ...data, nodes });
         fetchSubscriptionStatus();
         document.getElementById('lastUpdate').textContent = `更新于 ${new Date().toLocaleTimeString('zh-CN')}`;
       } catch (err) {
@@ -3325,11 +3411,91 @@
       }
     }
 
-    function updateStats(nodes) {
-      document.getElementById('totalNodes').textContent = nodes.length;
-      document.getElementById('healthyNodes').textContent = nodes.filter(n => !n.blacklisted && n.failure_count === 0).length;
+    function updateStats(payload) {
+      payload = payload || {};
+      const nodes = payload.nodes || [];
+      const totalNodesRaw = Number(payload.total_nodes);
+      const totalNodes = Number.isFinite(totalNodesRaw) ? totalNodesRaw : nodes.length;
+      document.getElementById('totalNodes').textContent = totalNodes;
+      document.getElementById('healthyNodes').textContent = nodes.filter(n => !n.blacklisted && n.initial_check_done && n.available).length;
       document.getElementById('activeConnections').textContent = nodes.reduce((sum, n) => sum + (n.active_connections || 0), 0);
       document.getElementById('blacklistedNodes').textContent = nodes.filter(n => n.blacklisted).length;
+
+      // Update region statistics
+      const regionStats = payload.region_stats || {};
+      const regionHealthy = payload.region_healthy || {};
+      const hasRegionData = Object.keys(regionStats).length > 0;
+
+      // Show/hide region stats section
+      const regionStatsEl = document.getElementById('regionStats');
+      const regionFilterEl = document.getElementById('regionFilter');
+      if (hasRegionData) {
+        regionStatsEl.style.display = 'grid';
+        regionFilterEl.style.display = 'flex';
+
+        // Update each region
+        const regions = ['jp', 'kr', 'us', 'hk', 'tw', 'other'];
+        regions.forEach(region => {
+          const count = regionStats[region] || 0;
+          const healthy = regionHealthy[region] || 0;
+          const valueEl = document.getElementById('region' + region.toUpperCase());
+          const healthyEl = document.getElementById('region' + region.toUpperCase() + 'Healthy');
+          if (valueEl) valueEl.textContent = count;
+          if (healthyEl) healthyEl.textContent = healthy + ' 健康';
+        });
+      } else {
+        regionStatsEl.style.display = 'none';
+        regionFilterEl.style.display = 'none';
+      }
+
+      syncRegionFilterUI();
+    }
+
+    // Region filter state
+    let currentRegionFilter = 'all';
+
+    function syncRegionFilterUI() {
+      const region = listState.region || 'all';
+      document.querySelectorAll('.region-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.region === region);
+      });
+      document.querySelectorAll('.region-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.region === region);
+      });
+    }
+
+    function filterByRegion(region) {
+      currentRegionFilter = region || 'all';
+      listState.region = currentRegionFilter;
+      listState.page = 1;
+      syncRegionFilterUI();
+      applyAndRender();
+    }
+
+    // Helper to get region emoji
+    function getRegionEmoji(region) {
+      const emojis = {
+        'jp': '🇯🇵',
+        'kr': '🇰🇷',
+        'us': '🇺🇸',
+        'hk': '🇭🇰',
+        'tw': '🇹🇼',
+        'other': '🌍'
+      };
+      return emojis[region] || '🌍';
+    }
+
+    // Helper to get region name
+    function getRegionName(region) {
+      const names = {
+        'jp': 'JP',
+        'kr': 'KR',
+        'us': 'US',
+        'hk': 'HK',
+        'tw': 'TW',
+        'other': 'Other'
+      };
+      return names[region] || 'Other';
     }
 
     async function probeNode(tag, options = {}) {
@@ -3338,9 +3504,6 @@
       probeInFlight.add(tag);
       const state = getRetryState(tag);
       state.lastAttempt = Date.now();
-      let ok = false;
-      let errorMsg = '';
-      let latencyMs = 0;
       try {
         if (!silent) {
           showToast('正在探测节点 ' + tag + '...', 'success');
@@ -3349,14 +3512,11 @@
         const data = await res.json();
         if (data.error) {
           recordProbeResult(tag, false);
-          errorMsg = data.error;
           if (!silent) {
             showToast('探测失败: ' + data.error, 'error');
           }
         } else {
           recordProbeResult(tag, true);
-          ok = true;
-          latencyMs = Number(data.latency_ms) || 0;
           if (!silent) {
             showToast(`探测成功！延迟: ${data.latency_ms}ms`, 'success');
           }
@@ -3366,7 +3526,6 @@
         }, 500);
       } catch (err) {
         recordProbeResult(tag, false);
-        errorMsg = err.message;
         if (!silent) {
           showToast('探测失败: ' + err.message, 'error');
         }
@@ -3374,99 +3533,10 @@
         probeInFlight.delete(tag);
         applyAndRender();
       }
-      return { ok, error: errorMsg, latencyMs };
     }
 
     function probe(tag) {
       return probeNode(tag, { silent: false });
-    }
-
-    async function runManualProbeBatch(nodes) {
-      if (!nodes || nodes.length === 0) {
-        return { success: 0, failed: 0 };
-      }
-
-      setProbeProgressState({
-        status: 'running',
-        total: nodes.length,
-        current: 0,
-        success: 0,
-        failed: 0,
-        progress: 0,
-        message: '开始探测...'
-      }, { broadcast: true });
-
-      let success = 0;
-      let failed = 0;
-      let index = 0;
-      let active = 0;
-      let lastStartAt = 0;
-      let startTimer = null;
-
-      return await new Promise((resolve) => {
-        const startNext = () => {
-          if (index >= nodes.length && active === 0) {
-            resolve({ success, failed });
-            return;
-          }
-
-          if (active >= manualProbeConcurrency || index >= nodes.length) {
-            return;
-          }
-
-          const now = Date.now();
-          const delay = Math.max(0, manualProbeIntervalMs - (now - lastStartAt));
-          if (delay > 0) {
-            if (!startTimer) {
-              startTimer = setTimeout(() => {
-                startTimer = null;
-                startNext();
-              }, delay);
-            }
-            return;
-          }
-
-          const node = nodes[index++];
-          if (!node || !node.tag) {
-            startNext();
-            return;
-          }
-          active += 1;
-          lastStartAt = Date.now();
-
-          const name = node.name || node.tag;
-          probeNode(node.tag, { silent: false })
-            .then((result) => {
-              if (result && result.ok) {
-                success += 1;
-              } else {
-                failed += 1;
-              }
-              const current = success + failed;
-              const progress = nodes.length ? (current / nodes.length) * 100 : 0;
-              const message = result && result.ok
-                ? `✅ ${name}: ${result.latencyMs || 1}ms`
-                : `❌ ${name}: ${result && result.error ? result.error : '失败'}`;
-              setProbeProgressState({
-                status: 'running',
-                total: nodes.length,
-                current,
-                success,
-                failed,
-                progress,
-                message
-              }, { broadcast: true });
-            })
-            .finally(() => {
-              active -= 1;
-              startNext();
-            });
-
-          startNext();
-        };
-
-        startNext();
-      });
     }
 
     async function probePendingNodes() {
@@ -3474,47 +3544,25 @@
         showToast('探测正在进行中...', 'error');
         return;
       }
-      const sharedState = loadProbeProgressState();
-      if (sharedState && sharedState.status === 'running' && !isProbeProgressStateStale(sharedState)) {
-        applyProbeProgressState(sharedState, { force: true });
-        showToast('探测正在进行中...', 'error');
-        return;
-      }
-      const pending = allNodes.filter(node => node && node.tag && shouldAutoProbe(node));
+      const pending = allNodes.filter(shouldAutoProbe);
       if (pending.length === 0) {
         showToast('暂无待探测节点', 'success');
         return;
       }
       isManualProbePending = true;
       try {
-        const { success, failed } = await runManualProbeBatch(pending);
-        setProbeProgressState({
-          status: 'complete',
-          total: pending.length,
-          current: pending.length,
-          success,
-          failed,
-          progress: 100,
-          message: `完成！成功 ${success}，失败 ${failed}`
-        }, { broadcast: true });
-        showToast(`探测完成！成功 ${success} 个，失败 ${failed} 个`, 'success');
-        setTimeout(refresh, 2000);
+        for (const node of pending) {
+          if (!node.tag) continue;
+          await probeNode(node.tag, { silent: false });
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       } finally {
         isManualProbePending = false;
-        if (probeProgressState.status === 'running') {
-          clearProbeProgressState({ broadcast: true });
-        }
       }
     }
 
     async function probeCurrentPage() {
       if (isProbing || isManualProbePending) {
-        showToast('探测正在进行中...', 'error');
-        return;
-      }
-      const sharedState = loadProbeProgressState();
-      if (sharedState && sharedState.status === 'running' && !isProbeProgressStateStale(sharedState)) {
-        applyProbeProgressState(sharedState, { force: true });
         showToast('探测正在进行中...', 'error');
         return;
       }
@@ -3531,26 +3579,15 @@
         btn.textContent = '探测中...';
       }
       try {
-        const { success, failed } = await runManualProbeBatch(targets);
-        setProbeProgressState({
-          status: 'complete',
-          total: targets.length,
-          current: targets.length,
-          success,
-          failed,
-          progress: 100,
-          message: `完成！成功 ${success}，失败 ${failed}`
-        }, { broadcast: true });
-        showToast(`探测完成！成功 ${success} 个，失败 ${failed} 个`, 'success');
-        setTimeout(refresh, 2000);
+        for (const node of targets) {
+          await probeNode(node.tag, { silent: false });
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       } finally {
         isManualProbePending = false;
         if (btn) {
           btn.disabled = false;
           btn.textContent = '本页探测';
-        }
-        if (probeProgressState.status === 'running') {
-          clearProbeProgressState({ broadcast: true });
         }
       }
     }
@@ -3578,30 +3615,33 @@
     }
 
     // 批量探测所有节点
+    let isProbing = false;
     async function probeAllNodes() {
       if (isProbing) {
         showToast('探测正在进行中...', 'error');
         return;
       }
 
-      const sharedState = loadProbeProgressState();
-      if (sharedState && sharedState.status === 'running' && !isProbeProgressStateStale(sharedState)) {
-        applyProbeProgressState(sharedState, { force: true });
-        showToast('探测正在进行中...', 'error');
-        return;
-      }
+      isProbing = true;
+      const btn = document.getElementById('probeAllBtn');
+      btn.disabled = true;
+      btn.textContent = '探测中...';
 
-      setProbeProgressState({
-        status: 'running',
-        total: 0,
-        current: 0,
-        success: 0,
-        failed: 0,
-        progress: 0,
-        message: '准备中...'
-      }, { broadcast: true });
+      // 显示进度条
+      const progressEl = document.getElementById('probeProgress');
+      const progressFill = document.getElementById('probeProgressFill');
+      const progressStats = document.getElementById('probeProgressStats');
+      const successCount = document.getElementById('probeSuccessCount');
+      const failedCount = document.getElementById('probeFailedCount');
+      const currentNode = document.getElementById('probeCurrentNode');
 
-      let hadError = false;
+      progressEl.classList.add('show');
+      progressFill.style.width = '0%';
+      progressStats.textContent = '0 / 0';
+      successCount.textContent = '0';
+      failedCount.textContent = '0';
+      currentNode.textContent = '准备中...';
+
       try {
         const response = await fetch('/api/nodes/probe-all', { method: 'POST' });
         const reader = response.body.getReader();
@@ -3620,7 +3660,7 @@
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6));
-                handleProbeEvent(data, { broadcast: true, notify: true });
+                handleProbeEvent(data);
               } catch (e) {
                 console.error('Parse error:', e);
               }
@@ -3628,79 +3668,46 @@
           }
         }
       } catch (err) {
-        hadError = true;
         showToast('批量探测失败: ' + err.message, 'error');
       } finally {
-        if (probeProgressState.status === 'running') {
-          clearProbeProgressState({ broadcast: true });
-        }
-        if (hadError) {
-          setTimeout(refresh, 2000);
-        }
+        isProbing = false;
+        btn.disabled = false;
+        btn.textContent = '⚡ 探测全部';
+        setTimeout(() => {
+          progressEl.classList.remove('show');
+          refresh();
+        }, 2000);
       }
     }
 
-    function handleProbeEvent(data, options = {}) {
-      if (!data || !data.type) return;
-      const { broadcast = false, notify = false } = options;
+    function handleProbeEvent(data) {
+      const progressFill = document.getElementById('probeProgressFill');
+      const progressStats = document.getElementById('probeProgressStats');
+      const successCountEl = document.getElementById('probeSuccessCount');
+      const failedCountEl = document.getElementById('probeFailedCount');
+      const currentNode = document.getElementById('probeCurrentNode');
 
       switch (data.type) {
-        case 'start': {
-          const total = Number(data.total) || 0;
-          setProbeProgressState({
-            status: 'running',
-            total,
-            current: 0,
-            success: 0,
-            failed: 0,
-            progress: 0,
-            message: '开始探测...'
-          }, { broadcast });
+        case 'start':
+          progressStats.textContent = `0 / ${data.total}`;
+          currentNode.textContent = '开始探测...';
           break;
-        }
-        case 'progress': {
-          const hasError = !!data.error;
-          let success = probeProgressState.success + (hasError ? 0 : 1);
-          let failed = probeProgressState.failed + (hasError ? 1 : 0);
-          const total = Number.isFinite(data.total) ? data.total : probeProgressState.total;
-          const current = Number.isFinite(data.current) ? data.current : success + failed;
-          if (current > success + failed) {
-            success += current - (success + failed);
-          }
-          const progress = Number.isFinite(data.progress) ? data.progress : (total ? (current / total) * 100 : probeProgressState.progress);
-          const name = data.name || data.tag || '';
-          const message = hasError ? `❌ ${name}: ${data.error}` : `✅ ${name}: ${data.latency}ms`;
-          setProbeProgressState({
-            status: 'running',
-            total,
-            current,
-            success,
-            failed,
-            progress,
-            message
-          }, { broadcast });
-          break;
-        }
-        case 'complete': {
-          const total = Number.isFinite(data.total) ? data.total : probeProgressState.total;
-          const success = Number.isFinite(data.success) ? data.success : probeProgressState.success;
-          const failed = Number.isFinite(data.failed) ? data.failed : probeProgressState.failed;
-          const current = total || success + failed;
-          setProbeProgressState({
-            status: 'complete',
-            total,
-            current,
-            success,
-            failed,
-            progress: 100,
-            message: `完成！成功 ${success}，失败 ${failed}`
-          }, { broadcast });
-          if (notify) {
-            showToast(`探测完成！成功 ${success} 个，失败 ${failed} 个`, 'success');
-            setTimeout(refresh, 2000);
+        case 'progress':
+          progressFill.style.width = `${data.progress}%`;
+          progressStats.textContent = `${data.current} / ${data.total}`;
+          if (data.error) {
+            failedCountEl.textContent = parseInt(failedCountEl.textContent) + 1;
+            currentNode.textContent = `❌ ${data.name}: ${data.error}`;
+          } else {
+            successCountEl.textContent = parseInt(successCountEl.textContent) + 1;
+            currentNode.textContent = `✅ ${data.name}: ${data.latency}ms`;
           }
           break;
-        }
+        case 'complete':
+          progressFill.style.width = '100%';
+          currentNode.textContent = `完成！成功 ${data.success}，失败 ${data.failed}`;
+          showToast(`探测完成！成功 ${data.success} 个，失败 ${data.failed} 个`, 'success');
+          break;
       }
     }
 
@@ -3748,6 +3755,34 @@
     }
 
     // 订阅状态相关
+    function hideSubscriptionErrorPopover() {
+      const popover = document.getElementById('subscriptionErrorPopover');
+      if (popover) popover.style.display = 'none';
+    }
+
+    function toggleSubscriptionErrorPopover(event) {
+      if (event) event.stopPropagation();
+      const popover = document.getElementById('subscriptionErrorPopover');
+      if (!popover) return;
+      popover.style.display = popover.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function updateSubscriptionErrorHint(errText) {
+      const icon = document.getElementById('subscriptionErrorIcon');
+      const text = document.getElementById('subscriptionErrorText');
+      if (!icon || !text) return;
+
+      const message = typeof errText === 'string' ? errText.trim() : '';
+      if (!message) {
+        icon.style.display = 'none';
+        hideSubscriptionErrorPopover();
+        return;
+      }
+
+      text.textContent = message;
+      icon.style.display = 'inline-flex';
+    }
+
     async function fetchSubscriptionStatus() {
       try {
         const res = await fetch('/api/subscription/status');
@@ -3768,6 +3803,7 @@
       if (!data.enabled) {
         card.style.display = 'none';
         btn.style.display = 'none';
+        updateSubscriptionErrorHint('');
         updateLoadingOverlay({ enabled: false });
         return;
       }
@@ -3779,6 +3815,8 @@
         statusEl.textContent = '刷新中...';
         statusEl.style.color = 'var(--warning)';
         trendEl.textContent = '正在获取订阅...';
+        trendEl.style.color = 'var(--warning)';
+        updateSubscriptionErrorHint('');
         updateLoadingOverlay(data);
         return;
       }
@@ -3787,14 +3825,17 @@
       statusEl.style.color = data.last_error ? 'var(--error)' : 'var(--success)';
 
       if (data.last_error) {
-        trendEl.textContent = '上次失败: ' + data.last_error;
+        trendEl.textContent = '上次失败';
         trendEl.style.color = 'var(--error)';
+        updateSubscriptionErrorHint(data.last_error);
       } else if (data.last_refresh && data.last_refresh !== '0001-01-01T00:00:00Z') {
         trendEl.textContent = '上次刷新: ' + formatTime(data.last_refresh);
         trendEl.style.color = 'var(--success)';
+        updateSubscriptionErrorHint('');
       } else {
         trendEl.textContent = '等待首次刷新';
         trendEl.style.color = 'var(--text-secondary)';
+        updateSubscriptionErrorHint('');
       }
 
       updateLoadingOverlay(data);
@@ -3815,14 +3856,14 @@
       const current = data.progress_current || 0;
       const nodes = data.progress_nodes || nodeCount || 0;
 
-      const shouldShow = enabled && (isRefreshing || nodeCount === 0);
+      const shouldShow = enabled && isRefreshing;
       if (!shouldShow) {
         overlay.classList.remove('show');
         return;
       }
 
       overlay.classList.add('show');
-      titleEl.textContent = isRefreshing ? '加载配置中...' : '等待订阅数据...';
+      titleEl.textContent = '后台拉取订阅中...';
       const parts = [];
       if (total > 0) parts.push(`订阅进度 ${current}/${total}`);
       parts.push(`已获取 ${nodes} 节点`);
@@ -3830,9 +3871,9 @@
       progressEl.textContent = total > 0 ? `${current}/${total}` : '';
     }
 
-    async function refreshSubscription() {
-      // Check if nodes have been modified since last refresh
-      try {
+	    async function refreshSubscription() {
+	      // Check if nodes have been modified since last refresh
+	      try {
         const statusRes = await fetch('/api/subscription/status');
         if (statusRes.ok) {
           const status = await statusRes.json();
@@ -3847,36 +3888,47 @@
             }
           }
         }
-      } catch (e) {
-        // Ignore status check errors, proceed with refresh
-      }
+	      } catch (e) {
+	        // Ignore status check errors, proceed with refresh
+	      }
 
-      const btn = document.getElementById('refreshSubBtn');
-      const text = document.getElementById('refreshSubText');
+	      const topBtn = document.getElementById('refreshSubBtn');
+	      const topText = document.getElementById('refreshSubText');
+	      const manageBtn = document.getElementById('refreshSubManageBtn');
 
-      btn.disabled = true;
-      text.textContent = '刷新中...';
+	      if (topBtn) topBtn.disabled = true;
+	      if (topText) topText.textContent = '刷新中...';
+	      if (manageBtn) {
+	        manageBtn.disabled = true;
+	        manageBtn.textContent = '拉取中...';
+	      }
 
-      try {
-        const res = await fetch('/api/subscription/refresh', { method: 'POST' });
+	      try {
+	        const res = await fetch('/api/subscription/refresh', { method: 'POST' });
         const data = await res.json();
 
         if (!res.ok) {
           showToast('订阅刷新失败: ' + (data.error || '未知错误'), 'error');
-        } else {
-          showToast('订阅刷新成功！共 ' + data.node_count + ' 个节点', 'success');
-          setTimeout(() => {
-            refresh();
-            fetchSubscriptionStatus();
-          }, 1000);
-        }
-      } catch (err) {
-        showToast('订阅刷新失败: ' + err.message, 'error');
-      } finally {
-        btn.disabled = false;
-        text.textContent = '刷新订阅';
-      }
-    }
+	        } else {
+	          showToast('订阅刷新成功！共 ' + data.node_count + ' 个节点', 'success');
+	          setTimeout(() => {
+	            refresh();
+	            fetchSubscriptionStatus();
+	            loadConfigNodes();
+	            loadSubscriptions();
+	          }, 1000);
+	        }
+	      } catch (err) {
+	        showToast('订阅刷新失败: ' + err.message, 'error');
+	      } finally {
+	        if (topBtn) topBtn.disabled = false;
+	        if (topText) topText.textContent = '刷新订阅';
+	        if (manageBtn) {
+	          manageBtn.disabled = false;
+	          manageBtn.textContent = '重新拉取节点';
+	        }
+	      }
+	    }
 
     // ========== 调试面板功能 ==========
 
@@ -4076,8 +4128,10 @@
 
     // ========== 节点管理功能 ==========
 
-    let configNodes = [];
-    let isEditMode = false;
+	    let configNodes = [];
+	    let subscriptionRows = [];
+	    let isEditMode = false;
+	    let currentManageSubTab = 'nodes';
 
     // Tab 切换
     function switchTab(tabName) {
@@ -4087,12 +4141,28 @@
       document.querySelector(`.tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
       document.getElementById(tabName + 'Tab').classList.add('active');
 
-      if (tabName === 'manage') {
-        loadConfigNodes();
-      } else if (tabName === 'debug') {
-        loadDebugData();
-      }
-    }
+	      if (tabName === 'manage') {
+	        switchManageSubTab(currentManageSubTab);
+	        loadConfigNodes();
+	        loadSubscriptions();
+	      } else if (tabName === 'debug') {
+	        loadDebugData();
+	      }
+	    }
+
+	    function switchManageSubTab(tabName) {
+	      currentManageSubTab = tabName;
+	      document.querySelectorAll('.manage-subtab').forEach(tab => tab.classList.remove('active'));
+	      document.querySelectorAll('.manage-pane').forEach(pane => pane.classList.remove('active'));
+
+	      const activeTab = document.querySelector(`.manage-subtab[data-manage-tab="${tabName}"]`);
+	      if (activeTab) activeTab.classList.add('active');
+
+	      const pane = tabName === 'subscriptions'
+	        ? document.getElementById('manageSubscriptionsPane')
+	        : document.getElementById('manageNodesPane');
+	      if (pane) pane.classList.add('active');
+	    }
 
     // 加载配置节点列表
     async function loadConfigNodes() {
@@ -4117,12 +4187,29 @@
           subWarning.style.display = 'none';
         }
       } catch (err) {
-        showToast('加载配置节点失败: ' + err.message, 'error');
-      }
-    }
+	        showToast('加载配置节点失败: ' + err.message, 'error');
+	      }
+	    }
+
+	    async function loadSubscriptions() {
+	      try {
+	        const res = await fetch('/api/subscriptions');
+	        if (res.status === 401) {
+	          showToast('请先登录', 'error');
+	          document.getElementById('loginOverlay').classList.add('show');
+	          return;
+	        }
+	        if (!res.ok) throw new Error('加载失败');
+	        const data = await res.json();
+	        subscriptionRows = data.subscriptions || [];
+	        renderSubscriptions();
+	      } catch (err) {
+	        showToast('加载订阅失败: ' + err.message, 'error');
+	      }
+	    }
 
     // 渲染配置节点列表
-    function renderConfigNodes() {
+	    function renderConfigNodes() {
       const container = document.getElementById('configNodesContainer');
       const emptyState = document.getElementById('configEmptyState');
 
@@ -4167,8 +4254,53 @@
             deleteNode(node.name);
           }
         });
-      });
-    }
+	      });
+	    }
+
+	    function renderSubscriptions() {
+	      const container = document.getElementById('subscriptionsContainer');
+	      const emptyState = document.getElementById('subscriptionsEmptyState');
+	      if (!container || !emptyState) return;
+
+	      if (!subscriptionRows.length) {
+	        container.innerHTML = '';
+	        emptyState.style.display = 'block';
+	        return;
+	      }
+
+	      emptyState.style.display = 'none';
+	      container.innerHTML = subscriptionRows.map((sub, index) => {
+	        const url = sub.subscription_url || '';
+	        const truncated = url.length > 80 ? url.substring(0, 80) + '...' : url;
+	        const lastFetch = sub.last_fetch_at ? formatTime(sub.last_fetch_at) : '-';
+	        const lastError = sub.last_error ? `<div class="subscription-error">错误: ${escapeHtml(sub.last_error)}</div>` : '';
+	        return `
+	          <div class="config-node-card" data-sub-index="${index}">
+	            <div class="config-node-info">
+	              <div class="config-node-name">${escapeHtml(sub.name || `subscription-${index + 1}`)}</div>
+	              <div class="config-node-uri" title="${escapeHtml(url)}">${escapeHtml(truncated)}</div>
+	              <div class="subscription-meta">
+	                <span>最近节点数: ${sub.last_node_count ?? 0}</span>
+	                <span>上次拉取: ${lastFetch}</span>
+	                <span>间隔: ${sub.interval_seconds ?? 0}s</span>
+	              </div>
+	              ${lastError}
+	            </div>
+	            <div class="config-node-actions">
+	              <button class="btn btn-danger btn-sm" data-action="delete-sub" data-sub-url="${escapeHtml(url)}">🗑️ 删除订阅</button>
+	            </div>
+	          </div>
+	        `;
+	      }).join('');
+
+	      container.querySelectorAll('button[data-action="delete-sub"]').forEach(btn => {
+	        btn.addEventListener('click', function() {
+	          const subURL = this.dataset.subUrl || '';
+	          if (!subURL) return;
+	          deleteSubscription(subURL);
+	        });
+	      });
+	    }
 
     function escapeHtml(text) {
       const div = document.createElement('div');
@@ -4264,7 +4396,7 @@
     }
 
     // 删除节点
-    async function deleteNode(name) {
+	    async function deleteNode(name) {
       if (!confirm(`确定要删除节点 "${name}" 吗？`)) return;
 
       try {
@@ -4278,13 +4410,99 @@
         }
         showToast(data.message || '节点已删除', 'success');
         loadConfigNodes();
-      } catch (err) {
-        showToast('删除失败: ' + err.message, 'error');
-      }
-    }
+	      } catch (err) {
+	        showToast('删除失败: ' + err.message, 'error');
+	      }
+	    }
 
-    // 触发重载
-    async function triggerReload() {
+	    async function deleteAllNodes() {
+	      if (!confirm('确定要删除所有节点吗？此操作会清空节点配置。')) return;
+
+	      const btn = document.getElementById('deleteAllNodesBtn');
+	      if (btn) {
+	        btn.disabled = true;
+	        btn.textContent = '删除中...';
+	      }
+	      try {
+	        const res = await fetch('/api/nodes/config', { method: 'DELETE' });
+	        const data = await res.json();
+	        if (!res.ok) {
+	          showToast(data.error || '删除所有节点失败', 'error');
+	          return;
+	        }
+	        showToast(data.message || '所有节点已删除', 'success');
+	        loadConfigNodes();
+	        refresh();
+	      } catch (err) {
+	        showToast('删除所有节点失败: ' + err.message, 'error');
+	      } finally {
+	        if (btn) {
+	          btn.disabled = false;
+	          btn.textContent = '🗑️ 删除所有节点';
+	        }
+	      }
+	    }
+
+	    async function addSubscription() {
+	      const input = document.getElementById('newSubscriptionUrl');
+	      if (!input) return;
+	      const subURL = input.value.trim();
+	      if (!subURL) {
+	        showToast('请输入订阅链接', 'error');
+	        return;
+	      }
+
+	      const btn = document.getElementById('addSubBtn');
+	      if (btn) {
+	        btn.disabled = true;
+	        btn.textContent = '添加中...';
+	      }
+	      try {
+	        const res = await fetch('/api/subscriptions', {
+	          method: 'POST',
+	          headers: { 'Content-Type': 'application/json' },
+	          body: JSON.stringify({ subscription_url: subURL })
+	        });
+	        const data = await res.json();
+	        if (!res.ok) {
+	          showToast(data.error || '添加订阅失败', 'error');
+	          return;
+	        }
+	        showToast(data.message || '订阅已添加', 'success');
+	        input.value = '';
+	        loadSubscriptions();
+	      } catch (err) {
+	        showToast('添加订阅失败: ' + err.message, 'error');
+	      } finally {
+	        if (btn) {
+	          btn.disabled = false;
+	          btn.textContent = '添加订阅';
+	        }
+	      }
+	    }
+
+	    async function deleteSubscription(subURL) {
+	      if (!subURL) return;
+	      if (!confirm('确定要删除该订阅吗？')) return;
+
+	      try {
+	        const res = await fetch('/api/subscriptions?url=' + encodeURIComponent(subURL), {
+	          method: 'DELETE'
+	        });
+	        const data = await res.json();
+	        if (!res.ok) {
+	          showToast(data.error || '删除订阅失败', 'error');
+	          return;
+	        }
+	        showToast(data.message || '订阅已删除', 'success');
+	        loadSubscriptions();
+	      } catch (err) {
+	        showToast('删除订阅失败: ' + err.message, 'error');
+	      }
+	    }
+
+	    // 触发重载
+	    async function triggerReload() {
       if (!confirm('重载配置会中断所有现有连接，确定要继续吗？')) return;
 
       const btn = document.getElementById('reloadBtn');
@@ -4320,7 +4538,18 @@
     // 初始化
     (async function init() {
       setupListControls();
-      initProbeProgressSync();
+      document.addEventListener('click', (event) => {
+        const wrap = document.getElementById('subscriptionTrendWrap');
+        if (!wrap) return;
+        if (!wrap.contains(event.target)) {
+          hideSubscriptionErrorPopover();
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          hideSubscriptionErrorPopover();
+        }
+      });
       window.addEventListener('resize', () => {
         updateStickyOffsets();
       });

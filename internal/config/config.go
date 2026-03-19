@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -17,6 +18,8 @@ import (
 	"syscall"
 	"time"
 
+	"easy_proxies/internal/storage"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,6 +31,7 @@ type Config struct {
 	Pool                PoolConfig                `yaml:"pool"`
 	Management          ManagementConfig          `yaml:"management"`
 	SubscriptionRefresh SubscriptionRefreshConfig `yaml:"subscription_refresh"`
+	Storage             StorageConfig             `yaml:"storage"`
 	GeoIP               GeoIPConfig               `yaml:"geoip"`
 	Nodes               []NodeConfig              `yaml:"nodes"`
 	NodesFile           string                    `yaml:"nodes_file"`    // 节点文件路径，每行一个 URI
@@ -37,6 +41,12 @@ type Config struct {
 	SkipCertVerify      bool                      `yaml:"skip_cert_verify"` // 全局跳过 SSL 证书验证
 
 	filePath string `yaml:"-"` // 配置文件路径，用于保存
+}
+
+// StorageConfig controls persistent node storage backend.
+type StorageConfig struct {
+	Type       string `yaml:"type"`        // sqlite (default)
+	SQLitePath string `yaml:"sqlite_path"` // SQLite DB path
 }
 
 // GeoIPConfig controls GeoIP-based region routing.
@@ -74,12 +84,13 @@ type MultiPortConfig struct {
 
 // ManagementConfig controls the monitoring HTTP endpoint.
 type ManagementConfig struct {
-	Enabled      *bool  `yaml:"enabled"`
-	Listen       string `yaml:"listen"`
-	ProbeTarget  string `yaml:"probe_target"`
-	IPInfoSource string `yaml:"ip_info_source"` // IP 检测源：ping0 / ippure
-	APIToken     string `yaml:"api_token"`      // API 访问 Token（Bearer），为空则自动生成
-	Password     string `yaml:"password"`       // WebUI 访问密码，为空则不需要密码
+	Enabled      *bool    `yaml:"enabled"`
+	Listen       string   `yaml:"listen"`
+	ProbeTarget  string   `yaml:"probe_target"`
+	IPInfoSource string   `yaml:"ip_info_source"` // IP 检测源：ping0 / ippure / iplark / dkly
+	APIToken     string   `yaml:"api_token"`      // API 访问 Token（Bearer），为空则自动生成
+	Password     string   `yaml:"password"`       // WebUI 访问密码，为空则不需要密码
+	CORSOrigins  []string `yaml:"cors_origins"`   // API CORS origins, supports "*"
 }
 
 // SubscriptionRefreshConfig controls subscription auto-refresh and reload settings.
@@ -133,6 +144,11 @@ func Load(path string) (*Config, error) {
 	if cfg.NodesFile != "" && !filepath.IsAbs(cfg.NodesFile) {
 		configDir := filepath.Dir(path)
 		cfg.NodesFile = filepath.Join(configDir, cfg.NodesFile)
+	}
+	// Resolve sqlite path relative to config file directory
+	if cfg.Storage.SQLitePath != "" && !filepath.IsAbs(cfg.Storage.SQLitePath) {
+		configDir := filepath.Dir(path)
+		cfg.Storage.SQLitePath = filepath.Join(configDir, cfg.Storage.SQLitePath)
 	}
 
 	if err := cfg.normalize(); err != nil {
@@ -191,9 +207,27 @@ func (c *Config) normalize() error {
 	} else {
 		c.Management.APIToken = strings.TrimSpace(c.Management.APIToken)
 	}
+	if len(c.Management.CORSOrigins) == 0 {
+		c.Management.CORSOrigins = []string{"*"}
+	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
 		c.Management.Enabled = &defaultEnabled
+	}
+	if strings.TrimSpace(c.Storage.Type) == "" {
+		c.Storage.Type = "sqlite"
+	} else {
+		c.Storage.Type = strings.ToLower(strings.TrimSpace(c.Storage.Type))
+	}
+	if c.Storage.Type != "sqlite" {
+		return fmt.Errorf("unsupported storage.type %q (only 'sqlite' is supported)", c.Storage.Type)
+	}
+	if strings.TrimSpace(c.Storage.SQLitePath) == "" {
+		baseDir := "."
+		if c.filePath != "" {
+			baseDir = filepath.Dir(c.filePath)
+		}
+		c.Storage.SQLitePath = filepath.Join(baseDir, "data", "easy_proxies.db")
 	}
 
 	// Subscription refresh defaults
@@ -218,8 +252,17 @@ func (c *Config) normalize() error {
 		c.Nodes[idx].Source = NodeSourceInline
 	}
 
-	// Load nodes from file if specified (but NOT if subscriptions exist - subscription takes priority)
-	if c.NodesFile != "" && len(c.Subscriptions) == 0 {
+	// Primary source: SQLite table current_nodes.
+	dbNodes, err := loadNodesFromSQLite(c.Storage.SQLitePath)
+	if err != nil {
+		log.Printf("⚠️ Failed to load nodes from sqlite %q: %v", c.Storage.SQLitePath, err)
+	} else if len(dbNodes) > 0 {
+		c.Nodes = append(c.Nodes, dbNodes...)
+		log.Printf("✅ Loaded %d nodes from sqlite", len(dbNodes))
+	}
+
+	// Backward-compatible migration path: load nodes_file only when sqlite has no active nodes.
+	if len(dbNodes) == 0 && c.NodesFile != "" && len(c.Subscriptions) == 0 {
 		fileNodes, err := loadNodesFromFile(c.NodesFile)
 		if err != nil {
 			return fmt.Errorf("load nodes from file %q: %w", c.NodesFile, err)
@@ -230,118 +273,66 @@ func (c *Config) normalize() error {
 		c.Nodes = append(c.Nodes, fileNodes...)
 	}
 
-	// Load nodes from subscriptions (highest priority - writes to nodes.txt)
-	if len(c.Subscriptions) > 0 {
-		if c.SubscriptionRefresh.Enabled {
-			// Async subscription refresh: try cached nodes.txt first, defer network fetch to subscription manager
-			nodesFilePath := c.NodesFile
-			if nodesFilePath == "" {
-				nodesFilePath = filepath.Join(filepath.Dir(c.filePath), "nodes.txt")
-				c.NodesFile = nodesFilePath
-			}
-			if _, err := os.Stat(nodesFilePath); err == nil {
-				fileNodes, err := loadNodesFromFile(nodesFilePath)
-				if err != nil {
-					log.Printf("⚠️ Failed to load cached nodes from %q: %v", nodesFilePath, err)
-				} else {
-					for idx := range fileNodes {
-						fileNodes[idx].Source = NodeSourceSubscription
-					}
-					c.Nodes = append(c.Nodes, fileNodes...)
-					log.Printf("✅ Loaded %d cached subscription nodes from %s", len(fileNodes), nodesFilePath)
-				}
-			} else {
-				log.Printf("ℹ️ No cached nodes found, subscription refresh will run in background")
-			}
-		} else {
-			var subNodes []NodeConfig
-			subTimeout := c.SubscriptionRefresh.Timeout
-			for _, subURL := range c.Subscriptions {
-				nodes, err := loadNodesFromSubscription(subURL, subTimeout)
-				if err != nil {
-					log.Printf("⚠️ Failed to load subscription %q: %v (skipping)", subURL, err)
-					continue
-				}
-				log.Printf("✅ Loaded %d nodes from subscription", len(nodes))
-				subNodes = append(subNodes, nodes...)
-			}
-			// Mark subscription nodes and write to nodes.txt
-			for idx := range subNodes {
-				subNodes[idx].Source = NodeSourceSubscription
-			}
-			if len(subNodes) > 0 {
-				// Determine nodes.txt path
-				nodesFilePath := c.NodesFile
-				if nodesFilePath == "" {
-					nodesFilePath = filepath.Join(filepath.Dir(c.filePath), "nodes.txt")
-					c.NodesFile = nodesFilePath
-				}
-				// Write subscription nodes to nodes.txt
-				if err := writeNodesToFile(nodesFilePath, subNodes); err != nil {
-					log.Printf("⚠️ Failed to write nodes to %q: %v", nodesFilePath, err)
-				} else {
-					log.Printf("✅ Written %d subscription nodes to %s", len(subNodes), nodesFilePath)
-				}
-			}
-			c.Nodes = append(c.Nodes, subNodes...)
-		}
+	// Keep startup non-blocking: subscription fetching is handled in background by SubscriptionManager.
+	if len(c.Nodes) == 0 && len(c.Subscriptions) > 0 && !c.SubscriptionRefresh.Enabled {
+		log.Printf("ℹ️ Startup skips synchronous subscription fetching; initial refresh will run in background")
 	}
+
+	c.Nodes = dedupeNodeConfigs(c.Nodes)
 
 	if len(c.Nodes) == 0 {
 		if len(c.Subscriptions) > 0 && c.SubscriptionRefresh.Enabled {
 			log.Printf("⚠️ No nodes loaded yet; waiting for subscription refresh")
 		} else {
-			log.Printf("ℹ️ No nodes configured yet; starting management UI without proxy nodes")
+			log.Printf("⚠️ No nodes loaded yet from sqlite/config; service will start and wait for data")
 		}
 	}
 	portCursor := c.MultiPort.BasePort
-	if len(c.Nodes) > 0 {
-		for idx := range c.Nodes {
-			c.Nodes[idx].Name = strings.TrimSpace(c.Nodes[idx].Name)
-			c.Nodes[idx].URI = strings.TrimSpace(c.Nodes[idx].URI)
+	for idx := range c.Nodes {
+		c.Nodes[idx].Name = strings.TrimSpace(c.Nodes[idx].Name)
+		c.Nodes[idx].URI = strings.TrimSpace(c.Nodes[idx].URI)
 
-			if c.Nodes[idx].URI == "" {
-				return fmt.Errorf("node %d is missing uri", idx)
-			}
+		if c.Nodes[idx].URI == "" {
+			return fmt.Errorf("node %d is missing uri", idx)
+		}
 
-			// Auto-extract name from URI fragment (#name) if not provided
-			if c.Nodes[idx].Name == "" {
-				if parsed, err := url.Parse(c.Nodes[idx].URI); err == nil && parsed.Fragment != "" {
-					// URL decode the fragment to handle encoded characters
-					if decoded, err := url.QueryUnescape(parsed.Fragment); err == nil {
-						c.Nodes[idx].Name = decoded
-					} else {
-						c.Nodes[idx].Name = parsed.Fragment
-					}
+		// Auto-extract name from URI fragment (#name) if not provided
+		if c.Nodes[idx].Name == "" {
+			if parsed, err := url.Parse(c.Nodes[idx].URI); err == nil && parsed.Fragment != "" {
+				// URL decode the fragment to handle encoded characters
+				if decoded, err := url.QueryUnescape(parsed.Fragment); err == nil {
+					c.Nodes[idx].Name = decoded
+				} else {
+					c.Nodes[idx].Name = parsed.Fragment
 				}
 			}
+		}
 
-			// Fallback to default name if still empty
-			if c.Nodes[idx].Name == "" {
-				c.Nodes[idx].Name = fmt.Sprintf("node-%d", idx)
-			}
+		// Fallback to default name if still empty
+		if c.Nodes[idx].Name == "" {
+			c.Nodes[idx].Name = fmt.Sprintf("node-%d", idx)
+		}
 
-			// Auto-assign port in multi-port/hybrid mode, skip occupied ports
-			if c.Nodes[idx].Port == 0 && (c.Mode == "multi-port" || c.Mode == "hybrid") {
-				for !isPortAvailable(c.MultiPort.Address, portCursor) {
-					log.Printf("⚠️  Port %d is in use, trying next port", portCursor)
-					portCursor++
-					if portCursor > 65535 {
-						return fmt.Errorf("no available ports found starting from %d", c.MultiPort.BasePort)
-					}
-				}
-				c.Nodes[idx].Port = portCursor
+		// Auto-assign port in multi-port/hybrid mode, skip occupied ports
+		if c.Nodes[idx].Port == 0 && (c.Mode == "multi-port" || c.Mode == "hybrid") {
+			for !isPortAvailable(c.MultiPort.Address, portCursor) {
+				log.Printf("⚠️  Port %d is in use, trying next port", portCursor)
 				portCursor++
-			} else if c.Nodes[idx].Port == 0 {
-				c.Nodes[idx].Port = portCursor
-				portCursor++
-			}
-
-			if c.Mode == "multi-port" || c.Mode == "hybrid" {
-				if c.Nodes[idx].Username == "" {
-					c.Nodes[idx].Username = c.MultiPort.Username
-					c.Nodes[idx].Password = c.MultiPort.Password
+				if portCursor > 65535 {
+					return fmt.Errorf("no available ports found starting from %d", c.MultiPort.BasePort)
 				}
+			}
+			c.Nodes[idx].Port = portCursor
+			portCursor++
+		} else if c.Nodes[idx].Port == 0 {
+			c.Nodes[idx].Port = portCursor
+			portCursor++
+		}
+
+		if c.Mode == "multi-port" || c.Mode == "hybrid" {
+			if c.Nodes[idx].Username == "" {
+				c.Nodes[idx].Username = c.MultiPort.Username
+				c.Nodes[idx].Password = c.MultiPort.Password
 			}
 		}
 	}
@@ -440,9 +431,27 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 	} else {
 		c.Management.APIToken = strings.TrimSpace(c.Management.APIToken)
 	}
+	if len(c.Management.CORSOrigins) == 0 {
+		c.Management.CORSOrigins = []string{"*"}
+	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
 		c.Management.Enabled = &defaultEnabled
+	}
+	if strings.TrimSpace(c.Storage.Type) == "" {
+		c.Storage.Type = "sqlite"
+	} else {
+		c.Storage.Type = strings.ToLower(strings.TrimSpace(c.Storage.Type))
+	}
+	if c.Storage.Type != "sqlite" {
+		return fmt.Errorf("unsupported storage.type %q (only 'sqlite' is supported)", c.Storage.Type)
+	}
+	if strings.TrimSpace(c.Storage.SQLitePath) == "" {
+		baseDir := "."
+		if c.filePath != "" {
+			baseDir = filepath.Dir(c.filePath)
+		}
+		c.Storage.SQLitePath = filepath.Join(baseDir, "data", "easy_proxies.db")
 	}
 	if c.SubscriptionRefresh.Interval <= 0 {
 		c.SubscriptionRefresh.Interval = 1 * time.Hour
@@ -461,7 +470,7 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 	}
 
 	if len(c.Nodes) == 0 {
-		return nil
+		log.Printf("⚠️ No nodes available for normalization; skipping node-specific validation")
 	}
 
 	// Build set of ports already assigned from portMap
@@ -545,6 +554,81 @@ func (c *Config) ManagementEnabled() bool {
 		return true
 	}
 	return *c.Management.Enabled
+}
+
+// UseSQLite reports whether sqlite storage is enabled.
+func (c *Config) UseSQLite() bool {
+	if c == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(c.Storage.Type), "sqlite")
+}
+
+func loadNodesFromSQLite(path string) ([]NodeConfig, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	store, err := storage.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rows, err := store.LoadActiveNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nodes := make([]NodeConfig, 0, len(rows))
+	for _, row := range rows {
+		source := NodeSourceSubscription
+		switch strings.ToLower(strings.TrimSpace(row.Source)) {
+		case string(NodeSourceInline):
+			source = NodeSourceInline
+		case string(NodeSourceFile):
+			source = NodeSourceFile
+		case string(NodeSourceSubscription):
+			source = NodeSourceSubscription
+		}
+		nodes = append(nodes, NodeConfig{
+			Name:     row.Name,
+			URI:      row.URI,
+			Port:     row.ListenPort,
+			Username: row.Username,
+			Password: row.Password,
+			Source:   source,
+		})
+	}
+	return nodes, nil
+}
+
+func dedupeNodeConfigs(nodes []NodeConfig) []NodeConfig {
+	if len(nodes) == 0 {
+		return nodes
+	}
+	seen := make(map[string]struct{}, len(nodes))
+	out := make([]NodeConfig, 0, len(nodes))
+	for _, node := range nodes {
+		key := strings.TrimSpace(node.URI)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, node)
+	}
+	return out
 }
 
 // loadNodesFromFile reads a nodes file where each line is a proxy URI
@@ -949,16 +1033,18 @@ func writeNodesToFile(path string, nodes []NodeConfig) error {
 	return writeFileWithLock(path, []byte(content), 0o644)
 }
 
-// SaveNodes persists nodes to their appropriate locations based on source.
-// - subscription/nodes_file nodes → nodes.txt (or configured nodes_file)
-// - inline nodes → config.yaml nodes array
-// Config.yaml structure (subscriptions, nodes_file) is preserved.
+// SaveNodes persists nodes.
+// SQLite storage (default): all nodes are upserted into current_nodes.
+// File fallback: keeps legacy behavior for nodes_file + inline nodes.
 func (c *Config) SaveNodes() error {
 	if c == nil {
 		return errors.New("config is nil")
 	}
 	if c.filePath == "" {
 		return errors.New("config file path is unknown")
+	}
+	if strings.EqualFold(strings.TrimSpace(c.Storage.Type), "sqlite") {
+		return c.saveNodesToSQLite()
 	}
 
 	// Separate nodes by source
@@ -1024,10 +1110,96 @@ func (c *Config) SaveNodes() error {
 	return nil
 }
 
+func (c *Config) saveNodesToSQLite() error {
+	store, err := storage.Open(c.Storage.SQLitePath)
+	if err != nil {
+		return fmt.Errorf("open sqlite store: %w", err)
+	}
+	defer store.Close()
+
+	now := time.Now().UTC()
+	rows := make([]storage.CurrentNode, 0, len(c.Nodes))
+	for _, node := range dedupeNodeConfigs(c.Nodes) {
+		source := strings.ToLower(strings.TrimSpace(string(node.Source)))
+		if source == "" {
+			source = string(NodeSourceSubscription)
+		}
+		rows = append(rows, storage.CurrentNode{
+			Name:          node.Name,
+			URI:           node.URI,
+			Source:        source,
+			ListenPort:    node.Port,
+			Username:      node.Username,
+			Password:      node.Password,
+			LatencyMs:     -1,
+			HealthScore:   -1,
+			Availability:  -1,
+			Active:        true,
+			FirstSeenAt:   now,
+			LastSeenAt:    now,
+			LastUpdatedAt: now,
+			LastCheckAt:   now,
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := store.ReplaceAllCurrentNodes(ctx, rows); err != nil {
+		return fmt.Errorf("save nodes to sqlite: %w", err)
+	}
+	return nil
+}
+
 // Save is deprecated, use SaveNodes instead.
 // This method is kept for backward compatibility but now delegates to SaveNodes.
 func (c *Config) Save() error {
 	return c.SaveNodes()
+}
+
+// SaveSubscriptions persists only subscription URLs to config file.
+func (c *Config) SaveSubscriptions() error {
+	if c == nil {
+		return errors.New("config is nil")
+	}
+	if c.filePath == "" {
+		return errors.New("config file path is unknown")
+	}
+
+	data, err := os.ReadFile(c.filePath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	var saveCfg Config
+	if err := yaml.Unmarshal(data, &saveCfg); err != nil {
+		return fmt.Errorf("decode config: %w", err)
+	}
+
+	seen := make(map[string]struct{}, len(c.Subscriptions))
+	cleaned := make([]string, 0, len(c.Subscriptions))
+	for _, sub := range c.Subscriptions {
+		sub = strings.TrimSpace(sub)
+		if sub == "" {
+			continue
+		}
+		if _, ok := seen[sub]; ok {
+			continue
+		}
+		seen[sub] = struct{}{}
+		cleaned = append(cleaned, sub)
+	}
+
+	saveCfg.Subscriptions = cleaned
+
+	newData, err := yaml.Marshal(&saveCfg)
+	if err != nil {
+		return fmt.Errorf("encode config: %w", err)
+	}
+
+	if err := writeFileWithLock(c.filePath, newData, 0o644); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	c.Subscriptions = cleaned
+	return nil
 }
 
 // SaveSettings persists only config settings (external_ip, probe_target, skip_cert_verify)

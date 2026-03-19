@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"easy_proxies/internal/storage"
+
 	M "github.com/sagernet/sing/common/metadata"
 )
 
@@ -26,11 +28,13 @@ type Config struct {
 	ProbeTarget    string
 	Password       string
 	APIToken       string
+	CORSOrigins    []string
 	ProxyUsername  string // 代理池的用户名（用于导出）
 	ProxyPassword  string // 代理池的密码（用于导出）
 	ExternalIP     string // 外部 IP 地址，用于导出时替换 0.0.0.0
 	SkipCertVerify bool   // 全局跳过 SSL 证书验证
 	CheckResultDir string // 检测结果输出目录（默认 checker）
+	Store          *storage.Store
 }
 
 // NodeInfo is static metadata about a proxy entry.
@@ -47,23 +51,20 @@ type NodeInfo struct {
 
 // IPInfo represents IP quality and geo details collected during probe.
 type IPInfo struct {
-	IP           string    `json:"ip,omitempty"`
-	PureScore    string    `json:"pure_score,omitempty"`
-	BotScore     string    `json:"bot_score,omitempty"`
-	BotStatus    string    `json:"bot_status,omitempty"`
-	SharedUsers  string    `json:"shared_users,omitempty"`
-	SharedStatus string    `json:"shared_status,omitempty"`
-	IPAttr       string    `json:"ip_attr,omitempty"`
-	IPSrc        string    `json:"ip_src,omitempty"`
-	Country      string    `json:"country,omitempty"`
-	City         string    `json:"city,omitempty"`
-	Location     string    `json:"location,omitempty"`
-	ISP          string    `json:"isp,omitempty"`
-	ASN          int64     `json:"asn,omitempty"`
-	FraudScore   string    `json:"fraud_score,omitempty"`
-	FraudStatus  string    `json:"fraud_status,omitempty"`
-	Source       string    `json:"source,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	IP          string    `json:"ip,omitempty"`
+	PureScore   string    `json:"pure_score,omitempty"`
+	BotScore    string    `json:"bot_score,omitempty"`
+	SharedUsers string    `json:"shared_users,omitempty"`
+	IPAttr      string    `json:"ip_attr,omitempty"`
+	IPSrc       string    `json:"ip_src,omitempty"`
+	Country     string    `json:"country,omitempty"`
+	City        string    `json:"city,omitempty"`
+	Location    string    `json:"location,omitempty"`
+	ISP         string    `json:"isp,omitempty"`
+	ASN         int64     `json:"asn,omitempty"`
+	FraudScore  string    `json:"fraud_score,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
 }
 
 // TimelineEvent represents a single usage event for debug tracking.
@@ -157,6 +158,7 @@ type Manager struct {
 	probeLogs  []ProbeLog
 	checkDir   string
 	checkMu    sync.Mutex
+	store      *storage.Store
 }
 
 // Logger interface for logging
@@ -178,6 +180,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		ctx:      ctx,
 		cancel:   cancel,
 		checkDir: checkDir,
+		store:    cfg.Store,
 	}
 	if cfg.ProbeTarget != "" {
 		target := cfg.ProbeTarget
@@ -276,8 +279,9 @@ func (m *Manager) probeAllNodes(timeout time.Duration) {
 	for _, e := range entries {
 		e.mu.RLock()
 		probeFn := e.probe
-		tag := e.info.Tag
+		info := e.info
 		e.mu.RUnlock()
+		tag := info.Tag
 
 		if probeFn == nil {
 			continue
@@ -285,7 +289,7 @@ func (m *Manager) probeAllNodes(timeout time.Duration) {
 
 		sem <- struct{}{}
 		wg.Add(1)
-		go func(entry *entry, probe probeFunc, tag string) {
+		go func(entry *entry, probe probeFunc, info NodeInfo, tag string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
@@ -326,7 +330,8 @@ func (m *Manager) probeAllNodes(timeout time.Duration) {
 			if err != nil && m.logger != nil {
 				m.logger.Warn("probe failed for ", tag, ": ", err)
 			}
-		}(e, probeFn, tag)
+			m.persistProbeResult(info, err == nil, latency, err, "auto")
+		}(e, probeFn, info, tag)
 	}
 	wg.Wait()
 
@@ -432,6 +437,9 @@ func (m *Manager) Probe(ctx context.Context, tag string) (time.Duration, error) 
 	if err != nil {
 		return 0, err
 	}
+	e.mu.RLock()
+	nodeInfo := e.info
+	e.mu.RUnlock()
 	if e.probe == nil {
 		return 0, errors.New("probe not available for this node")
 	}
@@ -450,6 +458,7 @@ func (m *Manager) Probe(ctx context.Context, tag string) (time.Duration, error) 
 			Cached:    true,
 			Source:    "manual",
 		})
+		m.persistProbeResult(nodeInfo, true, cached, nil, "cached")
 		return cached, nil
 	}
 	latency, err := e.probe(ctx)
@@ -491,6 +500,7 @@ func (m *Manager) Probe(ctx context.Context, tag string) (time.Duration, error) 
 						Cached:    false,
 						Source:    "manual",
 					})
+					m.persistProbeResult(nodeInfo, true, latency2, nil, "manual")
 					return latency2, nil
 				}
 				m.addProbeLog(ProbeLog{
@@ -502,6 +512,7 @@ func (m *Manager) Probe(ctx context.Context, tag string) (time.Duration, error) 
 					Cached:  false,
 					Source:  "manual",
 				})
+				m.persistProbeResult(nodeInfo, false, 0, err2, "manual")
 			}
 			e.mu.Lock()
 			e.lastProbeAt = time.Now()
@@ -516,8 +527,10 @@ func (m *Manager) Probe(ctx context.Context, tag string) (time.Duration, error) 
 				Cached:    true,
 				Source:    "fallback",
 			})
+			m.persistProbeResult(nodeInfo, true, lastProbe, nil, "fallback")
 			return lastProbe, nil
 		}
+		m.persistProbeResult(nodeInfo, false, 0, err, "manual")
 		return 0, err
 	}
 	e.recordProbeLatency(latency)
@@ -530,6 +543,7 @@ func (m *Manager) Probe(ctx context.Context, tag string) (time.Duration, error) 
 		Cached:    false,
 		Source:    "manual",
 	})
+	m.persistProbeResult(nodeInfo, true, latency, nil, "manual")
 	return latency, nil
 }
 
@@ -603,25 +617,37 @@ func (e *entry) snapshot() Snapshot {
 
 func (e *entry) recordFailure(err error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	errStr := err.Error()
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
 	e.failure++
 	e.lastError = errStr
 	e.lastFail = time.Now()
 	e.appendTimelineLocked(false, 0, errStr)
+	info := e.info
+	owner := e.owner
+	e.mu.Unlock()
+	if owner != nil {
+		owner.persistConnectionEvent(info, false, 0, errStr)
+	}
 }
 
 func (e *entry) recordSuccess() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.success++
 	e.lastOK = time.Now()
 	e.appendTimelineLocked(true, 0, "")
+	info := e.info
+	owner := e.owner
+	e.mu.Unlock()
+	if owner != nil {
+		owner.persistConnectionEvent(info, true, 0, "")
+	}
 }
 
 func (e *entry) recordSuccessWithLatency(latency time.Duration) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.success++
 	e.lastOK = time.Now()
 	e.lastProbe = latency
@@ -630,6 +656,12 @@ func (e *entry) recordSuccessWithLatency(latency time.Duration) {
 		latencyMs = 1
 	}
 	e.appendTimelineLocked(true, latencyMs, "")
+	info := e.info
+	owner := e.owner
+	e.mu.Unlock()
+	if owner != nil {
+		owner.persistConnectionEvent(info, true, latency, "")
+	}
 }
 
 func (e *entry) appendTimelineLocked(success bool, latencyMs int64, errStr string) {
@@ -895,6 +927,114 @@ func checkRecordKey(record []string) string {
 	return strings.Join(parts, "|")
 }
 
+func (m *Manager) persistProbeResult(info NodeInfo, success bool, latency time.Duration, probeErr error, source string) {
+	if m == nil || m.store == nil {
+		return
+	}
+	latencyMs := latency.Milliseconds()
+	if latencyMs == 0 && latency > 0 {
+		latencyMs = 1
+	}
+	if latencyMs < 0 {
+		latencyMs = -1
+	}
+	upd := storage.ProbeUpdate{
+		URI:         strings.TrimSpace(info.URI),
+		Name:        strings.TrimSpace(info.Name),
+		ListenAddr:  strings.TrimSpace(info.ListenAddress),
+		ListenPort:  info.Port,
+		LatencyMs:   latencyMs,
+		Success:     success,
+		CheckedAt:   time.Now(),
+		EventSource: strings.TrimSpace(source),
+	}
+	if probeErr != nil {
+		upd.ErrorMessage = probeErr.Error()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = m.store.UpdateProbeResult(ctx, upd)
+}
+
+func (m *Manager) persistConnectionEvent(info NodeInfo, success bool, latency time.Duration, errMessage string) {
+	if m == nil || m.store == nil {
+		return
+	}
+	latencyMs := latency.Milliseconds()
+	if latencyMs == 0 && latency > 0 {
+		latencyMs = 1
+	}
+	if latencyMs < 0 {
+		latencyMs = -1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	key, _ := m.store.ResolveIPPortKey(ctx, strings.TrimSpace(info.URI), info.Port)
+	_ = m.store.AppendNodeEvent(ctx, storage.NodeEvent{
+		URI:          strings.TrimSpace(info.URI),
+		Name:         strings.TrimSpace(info.Name),
+		IPPortKey:    key,
+		EventType:    "connection",
+		EventSource:  "runtime",
+		Success:      success,
+		LatencyMs:    latencyMs,
+		ErrorMessage: strings.TrimSpace(errMessage),
+		EventAt:      time.Now(),
+	})
+}
+
+func (m *Manager) persistIPInfo(info NodeInfo, ipInfo *IPInfo) {
+	if m == nil || m.store == nil || ipInfo == nil {
+		return
+	}
+	upd := storage.IPInfoUpdate{
+		URI:         strings.TrimSpace(info.URI),
+		Name:        strings.TrimSpace(info.Name),
+		ListenPort:  info.Port,
+		IP:          strings.TrimSpace(ipInfo.IP),
+		PureScore:   strings.TrimSpace(ipInfo.PureScore),
+		FraudScore:  strings.TrimSpace(ipInfo.FraudScore),
+		BotScore:    strings.TrimSpace(ipInfo.BotScore),
+		SharedUsers: strings.TrimSpace(ipInfo.SharedUsers),
+		IPType:      strings.TrimSpace(ipInfo.IPAttr),
+		NativeIP:    strings.TrimSpace(ipInfo.IPSrc),
+		Country:     strings.TrimSpace(ipInfo.Country),
+		City:        strings.TrimSpace(ipInfo.City),
+		Location:    strings.TrimSpace(ipInfo.Location),
+		ISP:         strings.TrimSpace(ipInfo.ISP),
+		ASN:         ipInfo.ASN,
+		InfoSource:  strings.TrimSpace(ipInfo.Source),
+		UpdatedAt:   ipInfo.UpdatedAt,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = m.store.UpdateNodeIPInfo(ctx, upd)
+}
+
+// ListSubscriptionRecords returns table1 rows from sqlite.
+func (m *Manager) ListSubscriptionRecords(ctx context.Context) ([]storage.SubscriptionRecord, error) {
+	if m == nil || m.store == nil {
+		return []storage.SubscriptionRecord{}, nil
+	}
+	return m.store.ListSubscriptions(ctx)
+}
+
+// ListNodeEvents returns table3 rows from sqlite.
+func (m *Manager) ListNodeEvents(ctx context.Context, ipPortKey string, limit int) ([]storage.NodeEvent, error) {
+	if m == nil || m.store == nil {
+		return []storage.NodeEvent{}, nil
+	}
+	return m.store.ListNodeEvents(ctx, ipPortKey, limit)
+}
+
+// ListCurrentNodes returns table2 active rows from sqlite.
+func (m *Manager) ListCurrentNodes(ctx context.Context) ([]storage.CurrentNode, error) {
+	if m == nil || m.store == nil {
+		return []storage.CurrentNode{}, nil
+	}
+	return m.store.LoadActiveNodes(ctx)
+}
+
 // ProbeLogs returns recent probe logs (newest first).
 func (m *Manager) ProbeLogs() []ProbeLog {
 	m.probeLogMu.Lock()
@@ -998,9 +1138,11 @@ func (h *EntryHandle) SetIPInfo(info IPInfo) {
 	h.ref.mu.Lock()
 	h.ref.ipInfo = &info
 	h.ref.lastIPInfo = info.UpdatedAt
+	nodeInfo := h.ref.info
 	h.ref.mu.Unlock()
 	if h.ref.owner != nil {
 		h.ref.owner.logCheckResult(&info)
+		h.ref.owner.persistIPInfo(nodeInfo, &info)
 	}
 }
 

@@ -49,10 +49,15 @@ Copy example config files:
 
 ```bash
 cp config.example.yaml config.yaml
-cp nodes.example nodes.txt
+mkdir -p data checker
 ```
 
-Edit `config.yaml` to set listen address and credentials, edit `nodes.txt` to add proxy nodes.
+Edit `config.yaml` to set listen address and credentials.
+
+Node data is now persisted to SQLite (`storage.sqlite_path`, default `./data/easy_proxies.db`):
+- Table1 `subscriptions`: subscription URL, update toggle/interval, collector/parser, normalization/dedupe status
+- Table2 `current_nodes`: current node state, IP, latency, health score, purity/fraud/bot/shared, IP type/native IP
+- Table3 `node_events`: event ledger keyed by `ip:port`, auto-retained for 30 days
 
 ### 2. Run
 
@@ -62,13 +67,15 @@ Edit `config.yaml` to set listen address and credentials, edit `nodes.txt` to ad
 ./start.sh
 ```
 
-`start.sh` bootstraps `config.yaml` from `config.example.yaml` on first run and creates an empty `nodes.txt` if needed, so the WebUI can start even before you add nodes.
-
 Or manually:
 
 ```bash
 docker compose up -d
 ```
+
+After startup:
+- Frontend admin: `http://localhost:3000`
+- Backend API: `http://localhost:9090`
 
 **Local Build:**
 
@@ -485,48 +492,35 @@ subscription_refresh:
 
 ## Docker Deployment
 
-**Method 1: Port Mapping Mode (Default, Cross-Platform Recommended)**
-
-Use explicit port mappings for Linux, macOS, and Windows Docker Desktop:
+Use separated frontend/backend services:
 
 ```yaml
-# docker-compose.yml
 services:
-  easy-proxies:
-    image: ghcr.io/jasonwong1991/easy_proxies:latest
-    restart: unless-stopped
+  backend:
+    build: .
     ports:
-      - "2323:2323"       # Pool/Hybrid mode entry
-      - "9090:9090"       # Web dashboard
-      - "24000-24200:24000-24200"  # Multi-Port/Hybrid mode
+      - "2323:2323"
+      - "9090:9090"
+      - "24000-24200:24000-24200"
     volumes:
       - ./config.yaml:/etc/easy-proxies/config.yaml
-      - ./nodes.txt:/etc/easy-proxies/nodes.txt
+      - ./data:/etc/easy-proxies/data
+      - ./checker:/etc/easy-proxies/checker
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_BASE: http://backend:9090
+    ports:
+      - "3000:3000"
 ```
 
-> **Note**: Config files need write permission for WebUI settings. Run `chmod 666 config.yaml nodes.txt` if you encounter permission errors.
-
-> **Advantage**: Works reliably on local Docker Desktop and keeps published ports explicit.
-
-> **Tip**: If these host ports are already occupied, override them temporarily when starting compose, for example `EASY_PROXIES_PORT=32323 EASY_PROXIES_WEB_PORT=39090 EASY_PROXIES_MULTI_PORTS=34000-34200:24000-24200 docker compose up -d`.
-
-**Method 2: Host Network Mode (Optional)**
-
-Use `network_mode: host` if you specifically want host networking and your Docker environment supports it well:
-
-```yaml
-# docker-compose.yml
-services:
-  easy-proxies:
-    image: ghcr.io/jasonwong1991/easy_proxies:latest
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./config.yaml:/etc/easy-proxies/config.yaml
-      - ./nodes.txt:/etc/easy-proxies/nodes.txt
-```
-
-> **Note**: Host networking behavior varies by platform. Prefer the default port-mapping compose file when developing locally.
+After deployment:
+- Frontend admin: `http://localhost:3000`
+- Backend API: `http://localhost:9090`
 
 ## Building
 

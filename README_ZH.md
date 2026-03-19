@@ -49,10 +49,15 @@
 
 ```bash
 cp config.example.yaml config.yaml
-cp nodes.example nodes.txt
+mkdir -p data checker
 ```
 
-编辑 `config.yaml` 配置监听地址和认证信息，编辑 `nodes.txt` 添加代理节点。
+编辑 `config.yaml` 配置监听地址和认证信息。
+
+节点数据现在默认写入 SQLite（`storage.sqlite_path`，默认 `./data/easy_proxies.db`）：
+- 表1 `subscriptions`：订阅 URL、更新开关、间隔、采集器/解析器、归一化/去重状态
+- 表2 `current_nodes`：当前节点、IP、延迟、健康度、纯净度、Fraud/Bot/共享人数、IP 类型/原生 IP 等
+- 表3 `node_events`：按 `ip:port` 关联的流水记录，自动保留最近 30 天
 
 ### 2. 运行
 
@@ -62,13 +67,15 @@ cp nodes.example nodes.txt
 ./start.sh
 ```
 
-`start.sh` 首次运行时会自动从 `config.example.yaml` 生成 `config.yaml`，并在缺失时创建空的 `nodes.txt`，这样即使还没填节点也能先进入 WebUI。
-
 或手动执行：
 
 ```bash
 docker compose up -d
 ```
+
+启动后访问：
+- 前端管理台：`http://localhost:3000`
+- 后端 API：`http://localhost:9090`
 
 **本地编译运行：**
 
@@ -486,48 +493,35 @@ subscription_refresh:
 
 ## Docker 部署
 
-**方式一：端口映射模式（默认推荐，跨平台更稳）**
-
-使用显式端口映射，兼容 Linux、macOS 和 Windows 的 Docker Desktop：
+使用前后端分离的双服务部署：
 
 ```yaml
-# docker-compose.yml
 services:
-  easy-proxies:
-    image: ghcr.io/jasonwong1991/easy_proxies:latest
-    restart: unless-stopped
+  backend:
+    build: .
     ports:
-      - "2323:2323"       # 节点池/混合模式入口
-      - "9090:9090"       # Web 监控面板
-      - "24000-24200:24000-24200"  # 多端口/混合模式
+      - "2323:2323"
+      - "9090:9090"
+      - "24000-24200:24000-24200"
     volumes:
       - ./config.yaml:/etc/easy-proxies/config.yaml
-      - ./nodes.txt:/etc/easy-proxies/nodes.txt
+      - ./data:/etc/easy-proxies/data
+      - ./checker:/etc/easy-proxies/checker
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_BASE: http://backend:9090
+    ports:
+      - "3000:3000"
 ```
 
-> **注意**: 配置文件需要可写权限以支持 WebUI 设置保存。如遇权限问题，请执行 `chmod 666 config.yaml nodes.txt`
-
-> **优点**: 本地开发环境更稳定，暴露端口也更清晰。
-
-> **提示**: 如果宿主机端口已被占用，可以在启动时临时覆盖，例如 `EASY_PROXIES_PORT=32323 EASY_PROXIES_WEB_PORT=39090 EASY_PROXIES_MULTI_PORTS=34000-34200:24000-24200 docker compose up -d`。
-
-**方式二：主机网络模式（可选）**
-
-如果你的 Docker 环境对主机网络支持良好，也可以使用 `network_mode: host`：
-
-```yaml
-# docker-compose.yml
-services:
-  easy-proxies:
-    image: ghcr.io/jasonwong1991/easy_proxies:latest
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./config.yaml:/etc/easy-proxies/config.yaml
-      - ./nodes.txt:/etc/easy-proxies/nodes.txt
-```
-
-> **注意**: 主机网络在不同平台上的表现差异较大，本地开发优先建议直接使用仓库内默认的端口映射版 compose 配置。
+部署后访问：
+- 前端管理台：`http://localhost:3000`
+- 后端 API：`http://localhost:9090`
 
 ## 构建
 

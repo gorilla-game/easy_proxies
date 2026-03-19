@@ -98,23 +98,20 @@ func openAPISpec() map[string]any {
 				"IPInfo": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"ip":            map[string]any{"type": "string"},
-						"pure_score":    map[string]any{"type": "string"},
-						"fraud_score":   map[string]any{"type": "string"},
-						"fraud_status":  map[string]any{"type": "string"},
-						"bot_score":     map[string]any{"type": "string"},
-						"bot_status":    map[string]any{"type": "string"},
-						"shared_users":  map[string]any{"type": "string"},
-						"shared_status": map[string]any{"type": "string"},
-						"ip_attr":       map[string]any{"type": "string"},
-						"ip_src":        map[string]any{"type": "string"},
-						"country":       map[string]any{"type": "string"},
-						"city":          map[string]any{"type": "string"},
-						"location":      map[string]any{"type": "string"},
-						"isp":           map[string]any{"type": "string"},
-						"asn":           map[string]any{"type": "integer"},
-						"source":        map[string]any{"type": "string"},
-						"updated_at":    map[string]any{"type": "string", "format": "date-time"},
+						"ip":           map[string]any{"type": "string"},
+						"pure_score":   map[string]any{"type": "string"},
+						"fraud_score":  map[string]any{"type": "string"},
+						"bot_score":    map[string]any{"type": "string"},
+						"shared_users": map[string]any{"type": "string"},
+						"ip_attr":      map[string]any{"type": "string"},
+						"ip_src":       map[string]any{"type": "string"},
+						"country":      map[string]any{"type": "string"},
+						"city":         map[string]any{"type": "string"},
+						"location":     map[string]any{"type": "string"},
+						"isp":          map[string]any{"type": "string"},
+						"asn":          map[string]any{"type": "integer"},
+						"source":       map[string]any{"type": "string"},
+						"updated_at":   map[string]any{"type": "string", "format": "date-time"},
 					},
 				},
 				"NodeSnapshot": map[string]any{
@@ -131,6 +128,8 @@ func openAPISpec() map[string]any {
 						"last_error":         map[string]any{"type": "string"},
 						"failure_count":      map[string]any{"type": "integer"},
 						"success_count":      map[string]any{"type": "integer"},
+						"region":             map[string]any{"type": "string"},
+						"country":            map[string]any{"type": "string"},
 						"ip_info":            schemaRef("IPInfo"),
 					},
 				},
@@ -140,6 +139,19 @@ func openAPISpec() map[string]any {
 						"nodes": map[string]any{
 							"type":  "array",
 							"items": schemaRef("NodeSnapshot"),
+						},
+						"all_nodes": map[string]any{
+							"type":  "array",
+							"items": schemaRef("NodeSnapshot"),
+						},
+						"total_nodes": map[string]any{"type": "integer"},
+						"region_stats": map[string]any{
+							"type":                 "object",
+							"additionalProperties": map[string]any{"type": "integer"},
+						},
+						"region_healthy": map[string]any{
+							"type":                 "object",
+							"additionalProperties": map[string]any{"type": "integer"},
 						},
 					},
 				},
@@ -159,27 +171,6 @@ func openAPISpec() map[string]any {
 						"nodes": map[string]any{
 							"type":  "array",
 							"items": schemaRef("NodeConfig"),
-						},
-					},
-				},
-				"BatchNamesRequest": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"names": map[string]any{
-							"type":  "array",
-							"items": map[string]any{"type": "string"},
-						},
-					},
-				},
-				"BatchMutationResponse": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"message": map[string]any{"type": "string"},
-						"success": map[string]any{"type": "integer"},
-						"total":   map[string]any{"type": "integer"},
-						"errors": map[string]any{
-							"type":  "array",
-							"items": map[string]any{"type": "string"},
 						},
 					},
 				},
@@ -233,249 +224,249 @@ func openAPISpec() map[string]any {
 						"progress_message": map[string]any{"type": "string"},
 					},
 				},
+				"ExtractorGenerateRequest": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"country":             map[string]any{"type": "string"},
+						"country_iso":         map[string]any{"type": "string"},
+						"region":              map[string]any{"type": "string"},
+						"gateway":             map[string]any{"type": "string"},
+						"protocol":            map[string]any{"type": "string"},
+						"rotation_mode":       map[string]any{"type": "string"},
+						"rotation_seconds":    map[string]any{"type": "integer"},
+						"security_mode":       map[string]any{"type": "string"},
+						"user_id":             map[string]any{"type": "string"},
+						"username":            map[string]any{"type": "string"},
+						"password":            map[string]any{"type": "string"},
+						"username_template":   map[string]any{"type": "string"},
+						"password_template":   map[string]any{"type": "string"},
+						"output_template":     map[string]any{"type": "string"},
+						"delimiter":           map[string]any{"type": "string"},
+						"custom_delimiter":    map[string]any{"type": "string"},
+						"api_response_format": map[string]any{"type": "string"},
+						"limit":               map[string]any{"type": "integer"},
+					},
+				},
+				"ExtractorGenerateResponse": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"count":       map[string]any{"type": "integer"},
+						"content":     map[string]any{"type": "string"},
+						"connections": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						"entries":     map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+					},
+				},
+				"ExtractorLinkResponse": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"fetch_url":            map[string]any{"type": "string"},
+						"signed_short_url":     map[string]any{"type": "string"},
+						"signed_short_code":    map[string]any{"type": "string"},
+						"signed_short_expires": map[string]any{"type": "string", "format": "date-time"},
+						"api_response_format":  map[string]any{"type": "string"},
+						"preview_count":        map[string]any{"type": "integer"},
+						"preview_first_line":   map[string]any{"type": "string"},
+						"has_token_in_query":   map[string]any{"type": "boolean"},
+					},
+				},
 			},
-		},
-		"security": []map[string]any{
-			{"bearerAuth": []string{}},
 		},
 		"paths": map[string]any{
 			"/api/auth": map[string]any{
 				"get": map[string]any{
-					"summary":     "Get auth token (if no password or already authorized)",
-					"security":    []any{},
-					"responses":   map[string]any{"200": jsonResponse("Auth info", schemaRef("AuthResponse")), "401": jsonResponse("Unauthorized", schemaRef("ErrorResponse"))},
-					"tags":        []string{"auth"},
-					"description": "If no password is set, returns token directly.",
+					"summary":   "Get auth status",
+					"responses": map[string]any{"200": map[string]any{"description": "Auth status", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("AuthResponse")}}}},
 				},
 				"post": map[string]any{
-					"summary":  "Login to obtain session token",
-					"security": []any{},
-					"tags":     []string{"auth"},
-					"requestBody": map[string]any{
-						"required": true,
-						"content": map[string]any{
-							"application/json": map[string]any{
-								"schema": schemaRef("AuthRequest"),
-							},
-						},
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Login success", schemaRef("AuthResponse")),
-						"401": jsonResponse("Unauthorized", schemaRef("ErrorResponse")),
-					},
-				},
-			},
-			"/api/settings": map[string]any{
-				"get": map[string]any{
-					"summary":   "Get runtime settings",
-					"tags":      []string{"settings"},
-					"responses": map[string]any{"200": jsonResponse("Settings", schemaRef("SettingsResponse"))},
-				},
-				"put": map[string]any{
-					"summary": "Update runtime settings",
-					"tags":    []string{"settings"},
-					"requestBody": map[string]any{
-						"required": true,
-						"content": map[string]any{
-							"application/json": map[string]any{
-								"schema": schemaRef("SettingsUpdate"),
-							},
-						},
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Updated", schemaRef("SettingsResponse")),
-						"400": jsonResponse("Bad request", schemaRef("ErrorResponse")),
-					},
+					"summary":     "Login",
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("AuthRequest")}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Login success", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("AuthResponse")}}}},
 				},
 			},
 			"/api/nodes": map[string]any{
 				"get": map[string]any{
-					"summary":   "List runtime nodes",
-					"tags":      []string{"nodes"},
-					"responses": map[string]any{"200": jsonResponse("Node list", schemaRef("NodeListResponse"))},
+					"summary":   "List nodes",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Node list", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("NodeListResponse")}}}},
+				},
+			},
+			"/api/nodes/current": map[string]any{
+				"get": map[string]any{
+					"summary":   "List current sqlite nodes",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Current nodes"}},
+				},
+			},
+			"/api/nodes/events": map[string]any{
+				"get": map[string]any{
+					"summary":   "List node events",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Node events"}},
+				},
+			},
+			"/api/extractor/options": map[string]any{
+				"get": map[string]any{
+					"summary":   "Extractor option lists",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Extractor options"}},
+				},
+			},
+			"/api/extractor/generate": map[string]any{
+				"post": map[string]any{
+					"summary":     "Generate account/password connection lines",
+					"security":    []map[string]any{{"bearerAuth": []string{}}},
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ExtractorGenerateRequest")}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Extractor result", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ExtractorGenerateResponse")}}}},
+				},
+			},
+			"/api/extractor/link": map[string]any{
+				"post": map[string]any{
+					"summary":     "Generate extractor API fetch link",
+					"security":    []map[string]any{{"bearerAuth": []string{}}},
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ExtractorGenerateRequest")}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Extractor link", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ExtractorLinkResponse")}}}},
+				},
+			},
+			"/api/extractor/fetch": map[string]any{
+				"get": map[string]any{
+					"summary": "Fetch generated extractor data (txt/csv/json)",
+					"parameters": []map[string]any{
+						{"name": "sl", "in": "query", "required": false, "schema": map[string]any{"type": "string"}, "description": "Signed short link code"},
+						{"name": "payload", "in": "query", "required": false, "schema": map[string]any{"type": "string"}, "description": "Legacy payload token"},
+						{"name": "format", "in": "query", "required": false, "schema": map[string]any{"type": "string"}},
+						{"name": "token", "in": "query", "required": false, "schema": map[string]any{"type": "string"}},
+					},
+					"responses": map[string]any{"200": map[string]any{"description": "Extractor fetch output"}},
+				},
+			},
+			"/api/subscriptions": map[string]any{
+				"get": map[string]any{
+					"summary":   "List subscriptions",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Subscriptions"}},
+				},
+				"post": map[string]any{
+					"summary":     "Add subscription",
+					"security":    []map[string]any{{"bearerAuth": []string{}}},
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{"subscription_url": map[string]any{"type": "string"}}}}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Added", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
+				},
+				"delete": map[string]any{
+					"summary":     "Delete subscription",
+					"security":    []map[string]any{{"bearerAuth": []string{}}},
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{"subscription_url": map[string]any{"type": "string"}}}}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Deleted", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
+				},
+			},
+			"/api/settings": map[string]any{
+				"get": map[string]any{
+					"summary":   "Get settings",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Settings", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("SettingsResponse")}}}},
+				},
+				"put": map[string]any{
+					"summary":     "Update settings",
+					"security":    []map[string]any{{"bearerAuth": []string{}}},
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("SettingsUpdate")}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Updated", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
 				},
 			},
 			"/api/nodes/{tag}/probe": map[string]any{
 				"post": map[string]any{
-					"summary": "Probe a node",
-					"tags":    []string{"nodes"},
-					"parameters": []map[string]any{
-						pathParam("tag", "Node tag"),
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Probe result", schemaRef("ProbeResponse")),
-						"404": jsonResponse("Not found", schemaRef("ErrorResponse")),
-					},
+					"summary":    "Probe node",
+					"security":   []map[string]any{{"bearerAuth": []string{}}},
+					"parameters": []map[string]any{{"name": "tag", "in": "path", "required": true, "schema": map[string]any{"type": "string"}}},
+					"responses":  map[string]any{"200": map[string]any{"description": "Probe result", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ProbeResponse")}}}},
 				},
 			},
 			"/api/nodes/{tag}/release": map[string]any{
 				"post": map[string]any{
-					"summary": "Release a blacklisted node",
-					"tags":    []string{"nodes"},
-					"parameters": []map[string]any{
-						pathParam("tag", "Node tag"),
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Release result", schemaRef("MessageResponse")),
-					},
+					"summary":    "Release node",
+					"security":   []map[string]any{{"bearerAuth": []string{}}},
+					"parameters": []map[string]any{{"name": "tag", "in": "path", "required": true, "schema": map[string]any{"type": "string"}}},
+					"responses":  map[string]any{"200": map[string]any{"description": "Released", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
 				},
 			},
 			"/api/nodes/probe-all": map[string]any{
 				"post": map[string]any{
-					"summary": "Probe all nodes (SSE stream)",
-					"tags":    []string{"nodes"},
-					"parameters": []map[string]any{
-						queryParam("interval_ms", "Initial interval in ms", "integer"),
-						queryParam("interval_step_ms", "Interval step in ms", "integer"),
-						queryParam("max_interval_ms", "Max interval in ms", "integer"),
-					},
-					"responses": map[string]any{
-						"200": textResponse("SSE stream", "text/event-stream"),
-					},
+					"summary":   "Probe all nodes",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "SSE stream"}},
 				},
 			},
 			"/api/export": map[string]any{
 				"get": map[string]any{
-					"summary": "Export available proxies",
-					"tags":    []string{"export"},
-					"parameters": []map[string]any{
-						queryParam("format", "Response format: json or text", "string"),
-					},
-					"responses": map[string]any{
-						"200": map[string]any{
-							"description": "Proxy list",
-							"content": map[string]any{
-								"text/plain": map[string]any{
-									"schema": map[string]any{"type": "string"},
-								},
-								"application/json": map[string]any{
-									"schema": schemaRef("ExportResponse"),
-								},
-							},
-						},
-					},
+					"summary":   "Export proxies",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Export result", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ExportResponse")}}}},
 				},
 			},
 			"/api/export/filter": map[string]any{
 				"get": map[string]any{
-					"summary": "Export proxies with filters",
-					"tags":    []string{"export"},
-					"parameters": []map[string]any{
-						queryParam("shared_min", "Minimum shared users", "integer"),
-						queryParam("shared_max", "Maximum shared users", "integer"),
-						queryParam("country", "Country keyword", "string"),
-						queryParam("ip_src", "IP source", "string"),
-						queryParam("ip_attr", "IP attribute", "string"),
-						queryParam("fraud_max", "Max fraud score", "number"),
-						queryParam("pure_max", "Max pure score", "number"),
-						queryParam("latency_max", "Max latency (ms)", "integer"),
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Filtered proxies", schemaRef("ExportFilterResponse")),
-					},
+					"summary":   "Export filtered proxies",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Export result", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ExportFilterResponse")}}}},
+				},
+			},
+			"/api/subscription/status": map[string]any{
+				"get": map[string]any{
+					"summary":   "Subscription status",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Status", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("SubscriptionStatus")}}}},
+				},
+			},
+			"/api/subscription/refresh": map[string]any{
+				"post": map[string]any{
+					"summary":   "Refresh subscription",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Refreshed", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
 				},
 			},
 			"/api/debug": map[string]any{
 				"get": map[string]any{
-					"summary": "Debug info",
-					"tags":    []string{"debug"},
-					"responses": map[string]any{
-						"200": map[string]any{"description": "Debug payload"},
-					},
+					"summary":   "Debug info",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Debug info"}},
 				},
 			},
 			"/api/nodes/config": map[string]any{
 				"get": map[string]any{
 					"summary":   "List config nodes",
-					"tags":      []string{"config"},
-					"responses": map[string]any{"200": jsonResponse("Config nodes", schemaRef("ConfigNodesResponse"))},
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Node list", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("ConfigNodesResponse")}}}},
 				},
 				"post": map[string]any{
-					"summary": "Create config node",
-					"tags":    []string{"config"},
-					"requestBody": map[string]any{
-						"required": true,
-						"content": map[string]any{
-							"application/json": map[string]any{
-								"schema": schemaRef("NodeConfig"),
-							},
-						},
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Created", schemaRef("MessageResponse")),
-						"400": jsonResponse("Bad request", schemaRef("ErrorResponse")),
-					},
+					"summary":     "Create config node",
+					"security":    []map[string]any{{"bearerAuth": []string{}}},
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("NodeConfig")}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Created", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
+				},
+				"delete": map[string]any{
+					"summary":   "Delete all config nodes",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Deleted", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
 				},
 			},
 			"/api/nodes/config/{name}": map[string]any{
 				"put": map[string]any{
-					"summary": "Update config node",
-					"tags":    []string{"config"},
-					"parameters": []map[string]any{
-						pathParam("name", "Node name"),
-					},
-					"requestBody": map[string]any{
-						"required": true,
-						"content": map[string]any{
-							"application/json": map[string]any{
-								"schema": schemaRef("NodeConfig"),
-							},
-						},
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Updated", schemaRef("MessageResponse")),
-						"400": jsonResponse("Bad request", schemaRef("ErrorResponse")),
-					},
+					"summary":     "Update config node",
+					"security":    []map[string]any{{"bearerAuth": []string{}}},
+					"parameters":  []map[string]any{{"name": "name", "in": "path", "required": true, "schema": map[string]any{"type": "string"}}},
+					"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("NodeConfig")}}},
+					"responses":   map[string]any{"200": map[string]any{"description": "Updated", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
 				},
 				"delete": map[string]any{
-					"summary": "Delete config node",
-					"tags":    []string{"config"},
-					"parameters": []map[string]any{
-						pathParam("name", "Node name"),
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Deleted", schemaRef("MessageResponse")),
-						"404": jsonResponse("Not found", schemaRef("ErrorResponse")),
-					},
-				},
-			},
-			"/api/nodes/config/batch-delete": map[string]any{
-				"post": map[string]any{
-					"summary": "Delete multiple config nodes",
-					"tags":    []string{"config"},
-					"requestBody": map[string]any{
-						"required": true,
-						"content": map[string]any{
-							"application/json": map[string]any{
-								"schema": schemaRef("BatchNamesRequest"),
-							},
-						},
-					},
-					"responses": map[string]any{
-						"200": jsonResponse("Batch delete result", schemaRef("BatchMutationResponse")),
-						"400": jsonResponse("Bad request", schemaRef("ErrorResponse")),
-					},
+					"summary":    "Delete config node",
+					"security":   []map[string]any{{"bearerAuth": []string{}}},
+					"parameters": []map[string]any{{"name": "name", "in": "path", "required": true, "schema": map[string]any{"type": "string"}}},
+					"responses":  map[string]any{"200": map[string]any{"description": "Deleted", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
 				},
 			},
 			"/api/reload": map[string]any{
 				"post": map[string]any{
-					"summary":   "Reload configuration",
-					"tags":      []string{"config"},
-					"responses": map[string]any{"200": jsonResponse("Reloaded", schemaRef("MessageResponse"))},
-				},
-			},
-			"/api/subscription/status": map[string]any{
-				"get": map[string]any{
-					"summary":   "Subscription refresh status",
-					"tags":      []string{"subscription"},
-					"responses": map[string]any{"200": jsonResponse("Status", schemaRef("SubscriptionStatus"))},
-				},
-			},
-			"/api/subscription/refresh": map[string]any{
-				"post": map[string]any{
-					"summary":   "Trigger subscription refresh",
-					"tags":      []string{"subscription"},
-					"responses": map[string]any{"200": jsonResponse("Refresh result", schemaRef("MessageResponse"))},
+					"summary":   "Reload config",
+					"security":  []map[string]any{{"bearerAuth": []string{}}},
+					"responses": map[string]any{"200": map[string]any{"description": "Reloaded", "content": map[string]any{"application/json": map[string]any{"schema": schemaRef("MessageResponse")}}}},
 				},
 			},
 		},
@@ -483,47 +474,7 @@ func openAPISpec() map[string]any {
 }
 
 func schemaRef(name string) map[string]any {
-	return map[string]any{"$ref": "#/components/schemas/" + name}
-}
-
-func jsonResponse(desc string, schema any) map[string]any {
 	return map[string]any{
-		"description": desc,
-		"content": map[string]any{
-			"application/json": map[string]any{
-				"schema": schema,
-			},
-		},
-	}
-}
-
-func textResponse(desc string, contentType string) map[string]any {
-	return map[string]any{
-		"description": desc,
-		"content": map[string]any{
-			contentType: map[string]any{
-				"schema": map[string]any{"type": "string"},
-			},
-		},
-	}
-}
-
-func pathParam(name, desc string) map[string]any {
-	return map[string]any{
-		"name":        name,
-		"in":          "path",
-		"description": desc,
-		"required":    true,
-		"schema":      map[string]any{"type": "string"},
-	}
-}
-
-func queryParam(name, desc, typ string) map[string]any {
-	return map[string]any{
-		"name":        name,
-		"in":          "query",
-		"description": desc,
-		"required":    false,
-		"schema":      map[string]any{"type": typ},
+		"$ref": "#/components/schemas/" + name,
 	}
 }

@@ -3,9 +3,9 @@ package subscription
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -21,6 +21,7 @@ import (
 	"easy_proxies/internal/boxmgr"
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/monitor"
+	"easy_proxies/internal/storage"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,6 +41,11 @@ func WithLogger(l Logger) Option {
 	return func(m *Manager) { m.logger = l }
 }
 
+// WithStore sets sqlite store for persistence.
+func WithStore(store *storage.Store) Option {
+	return func(m *Manager) { m.store = store }
+}
+
 // Manager handles periodic subscription refresh.
 type Manager struct {
 	mu sync.RWMutex
@@ -54,10 +60,13 @@ type Manager struct {
 	cancel        context.CancelFunc
 	refreshMu     sync.Mutex // prevents concurrent refreshes
 	manualRefresh chan struct{}
+	started       bool
+	loopStarted   bool
 
-	// Track nodes.txt content hash to detect modifications
-	lastSubHash      string    // Hash of nodes.txt content after last subscription refresh
-	lastNodesModTime time.Time // Last known modification time of nodes.txt
+	// Track last refresh hash to detect changes between refresh cycles.
+	lastSubHash      string
+	lastNodesModTime time.Time
+	store            *storage.Store
 }
 
 type subFetchResult struct {
@@ -115,19 +124,35 @@ func New(cfg *config.Config, boxMgr *boxmgr.Manager, opts ...Option) *Manager {
 
 // Start begins the periodic refresh loop.
 func (m *Manager) Start() {
-	if !m.baseCfg.SubscriptionRefresh.Enabled {
-		m.logger.Infof("subscription refresh disabled")
+	m.mu.Lock()
+	if m.started {
+		m.mu.Unlock()
 		return
 	}
-	if len(m.baseCfg.Subscriptions) == 0 {
-		m.logger.Infof("no subscriptions configured, refresh disabled")
+	m.started = true
+	m.status.NodeCount = len(m.baseCfg.Nodes)
+	m.mu.Unlock()
+
+	m.syncSubscriptionsMetadata()
+
+	subCount := len(m.baseCfg.Subscriptions)
+	if subCount == 0 {
+		m.logger.Infof("no subscriptions configured yet, waiting for manual refresh")
+	} else if m.baseCfg.SubscriptionRefresh.Enabled || len(m.baseCfg.Nodes) == 0 {
+		// Run initial refresh in background. This keeps startup non-blocking.
+		go m.doRefresh()
+	}
+
+	if !m.baseCfg.SubscriptionRefresh.Enabled {
+		m.logger.Infof("subscription auto-refresh disabled, manual refresh only")
 		return
 	}
 
 	interval := m.baseCfg.SubscriptionRefresh.Interval
 	m.logger.Infof("starting subscription refresh, interval: %s", interval)
-
-	go m.doRefresh()
+	m.mu.Lock()
+	m.loopStarted = true
+	m.mu.Unlock()
 	go m.refreshLoop(interval)
 }
 
@@ -145,6 +170,22 @@ func (m *Manager) Stop() {
 
 // RefreshNow triggers an immediate refresh.
 func (m *Manager) RefreshNow() error {
+	if len(m.baseCfg.Subscriptions) == 0 {
+		return fmt.Errorf("no subscriptions configured")
+	}
+
+	m.mu.RLock()
+	loopStarted := m.loopStarted
+	m.mu.RUnlock()
+	if !loopStarted {
+		m.doRefresh()
+		status := m.Status()
+		if status.LastError != "" {
+			return fmt.Errorf("refresh failed: %s", status.LastError)
+		}
+		return nil
+	}
+
 	select {
 	case m.manualRefresh <- struct{}{}:
 	default:
@@ -275,30 +316,16 @@ func (m *Manager) doRefresh() {
 		m.mu.Unlock()
 		return
 	}
+	nodes = normalizeAndDedupeNodes(nodes)
+	m.syncSubscriptionFetchResults(results)
 
 	m.logger.Infof("fetched %d nodes from subscriptions", len(nodes))
-
-	// Write subscription nodes to nodes.txt
-	nodesFilePath := m.getNodesFilePath()
-	if err := m.writeNodesToFile(nodesFilePath, nodes); err != nil {
-		m.logger.Errorf("failed to write nodes.txt: %v", err)
-		m.mu.Lock()
-		m.status.LastError = fmt.Sprintf("write nodes.txt: %v", err)
-		m.status.LastRefresh = time.Now()
-		m.mu.Unlock()
-		return
-	}
-	m.logger.Infof("written %d nodes to %s", len(nodes), nodesFilePath)
 
 	// Update hash and mod time after writing
 	newHash := m.computeNodesHash(nodes)
 	m.mu.Lock()
 	m.lastSubHash = newHash
-	if info, err := os.Stat(nodesFilePath); err == nil {
-		m.lastNodesModTime = info.ModTime()
-	} else {
-		m.lastNodesModTime = time.Now()
-	}
+	m.lastNodesModTime = time.Now()
 	m.status.NodesModified = false
 	m.mu.Unlock()
 
@@ -327,7 +354,7 @@ func (m *Manager) doRefresh() {
 	m.logger.Infof("subscription refresh completed, %d nodes active", len(nodes))
 }
 
-// getNodesFilePath returns the path to nodes.txt.
+// getNodesFilePath returns the legacy nodes file path.
 func (m *Manager) getNodesFilePath() string {
 	if m.baseCfg.NodesFile != "" {
 		return m.baseCfg.NodesFile
@@ -561,18 +588,31 @@ func (m *Manager) computeNodesHash(nodes []config.NodeConfig) string {
 	return hex.EncodeToString(hash[:])
 }
 
-// CheckNodesModified checks if nodes.txt has been modified since last refresh.
-// Uses file modification time as a fast path to avoid unnecessary file reads.
+// CheckNodesModified compares current active nodes against last refresh hash.
+// SQLite mode reads current_nodes; legacy mode falls back to nodes file comparison.
 func (m *Manager) CheckNodesModified() bool {
 	m.mu.RLock()
 	lastHash := m.lastSubHash
-	lastMod := m.lastNodesModTime
 	m.mu.RUnlock()
 
 	if lastHash == "" {
 		return false // No previous refresh, can't determine modification
 	}
+	if m.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		rows, err := m.store.LoadActiveNodes(ctx)
+		if err != nil {
+			return false
+		}
+		nodes := make([]config.NodeConfig, 0, len(rows))
+		for _, row := range rows {
+			nodes = append(nodes, config.NodeConfig{URI: row.URI})
+		}
+		return m.computeNodesHash(nodes) != lastHash
+	}
 
+	lastMod := m.lastNodesModTime
 	nodesFilePath := m.getNodesFilePath()
 
 	// Fast path: check modification time first
@@ -706,8 +746,8 @@ func (m *Manager) createNewConfig(nodes []config.NodeConfig) *config.Config {
 	// Deep copy base config
 	newCfg := *m.baseCfg
 
-	// Assign port numbers to nodes in multi-port mode
-	if newCfg.Mode == "multi-port" {
+	// Assign port numbers to nodes in multi-port and hybrid modes.
+	if newCfg.Mode == "multi-port" || newCfg.Mode == "hybrid" {
 		portCursor := newCfg.MultiPort.BasePort
 		for i := range nodes {
 			nodes[i].Port = portCursor
@@ -724,6 +764,7 @@ func (m *Manager) createNewConfig(nodes []config.NodeConfig) *config.Config {
 	for i := range nodes {
 		nodes[i].Name = strings.TrimSpace(nodes[i].Name)
 		nodes[i].URI = strings.TrimSpace(nodes[i].URI)
+		nodes[i].Source = config.NodeSourceSubscription
 
 		// Extract name from URI fragment if not provided
 		if nodes[i].Name == "" {
@@ -807,6 +848,94 @@ func isProxyURI(s string) bool {
 		}
 	}
 	return false
+}
+
+func (m *Manager) syncSubscriptionsMetadata() {
+	if m == nil || m.store == nil || m.baseCfg == nil {
+		return
+	}
+	records := make([]storage.SubscriptionRecord, 0, len(m.baseCfg.Subscriptions))
+	interval := int64(m.baseCfg.SubscriptionRefresh.Interval / time.Second)
+	if interval < 0 {
+		interval = 0
+	}
+	for idx, subURL := range m.baseCfg.Subscriptions {
+		subURL = strings.TrimSpace(subURL)
+		if subURL == "" {
+			continue
+		}
+		records = append(records, storage.SubscriptionRecord{
+			Name:             fmt.Sprintf("subscription-%d", idx+1),
+			SubscriptionURL:  subURL,
+			EnabledUpdate:    true,
+			IntervalSeconds:  interval,
+			Collector:        "http",
+			Parser:           "auto",
+			Normalized:       true,
+			UnifiedStructure: true,
+			Deduped:          true,
+		})
+	}
+	if len(records) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := m.store.UpsertSubscriptions(ctx, records); err != nil {
+		m.logger.Warnf("sync subscriptions metadata failed: %v", err)
+	}
+}
+
+func (m *Manager) syncSubscriptionFetchResults(results []subFetchResult) {
+	if m == nil || m.store == nil || len(results) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	now := time.Now()
+	for _, res := range results {
+		errMessage := ""
+		if res.Err != nil {
+			errMessage = res.Err.Error()
+		}
+		if err := m.store.MarkSubscriptionFetchResult(ctx, res.URL, res.NodeCount, errMessage, now); err != nil {
+			m.logger.Warnf("sync subscription fetch result failed: %v", err)
+		}
+	}
+}
+
+func normalizeAndDedupeNodes(nodes []config.NodeConfig) []config.NodeConfig {
+	if len(nodes) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(nodes))
+	out := make([]config.NodeConfig, 0, len(nodes))
+	for idx, node := range nodes {
+		node.URI = strings.TrimSpace(node.URI)
+		if node.URI == "" || !isProxyURI(node.URI) {
+			continue
+		}
+		if _, ok := seen[node.URI]; ok {
+			continue
+		}
+		seen[node.URI] = struct{}{}
+		node.Name = strings.TrimSpace(node.Name)
+		if node.Name == "" {
+			if parsed, err := url.Parse(node.URI); err == nil && parsed.Fragment != "" {
+				if decoded, err := url.QueryUnescape(parsed.Fragment); err == nil {
+					node.Name = strings.TrimSpace(decoded)
+				} else {
+					node.Name = strings.TrimSpace(parsed.Fragment)
+				}
+			}
+		}
+		if node.Name == "" {
+			node.Name = fmt.Sprintf("node-%d", idx+1)
+		}
+		node.Source = config.NodeSourceSubscription
+		out = append(out, node)
+	}
+	return out
 }
 
 type defaultLogger struct{}

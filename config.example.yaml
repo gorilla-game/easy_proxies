@@ -1,47 +1,153 @@
-mode: pool  # pool 或 multi-port（也支持 multi_port）
+# ═══════════════════════════════════════════════════════════════
+# Easy Proxies 完整配置文件
+# ═══════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────
+# 运行模式
+# ───────────────────────────────────────────────────────────────
+# pool: 单端口代理池，所有节点共享一个端口，自动负载均衡
+# multi-port: 多端口模式，每个节点独立端口
+# hybrid: 混合模式，同时启用 pool + multi-port
+mode: pool
+
+# 日志级别: debug, info, warn, error
 log_level: info
-skip_cert_verify: false  # 全局跳过 SSL 证书验证（默认 false）
-management:
-  enabled: true
-  listen: 0.0.0.0:9090
-  probe_target: www.apple.com:80
-  ip_info_source: ping0  # IP 检测源：ping0(默认) 或 ippure，支持自动降级
-  api_token: ""  # API 认证 Token（Bearer），为空则启动时自动生成
-  password: ""  # WebUI 访问密码，为空则不需要密码（可选）
+
+# 全局跳过 SSL 证书验证（默认 false，不建议在生产环境启用）
+skip_cert_verify: false
+
+# 外部 IP 地址，用于导出配置时替换 0.0.0.0（可选）
+# external_ip: "your.public.ip"
+
+# ───────────────────────────────────────────────────────────────
+# 监听配置（Pool 模式入口）
+# ───────────────────────────────────────────────────────────────
 listener:
-  address: 0.0.0.0
-  port: 2323
-  username: username
-  password: password
+  address: 0.0.0.0      # 监听地址
+  port: 2323            # 监听端口
+  username: username    # 代理认证用户名
+  password: password    # 代理认证密码
+
+# ───────────────────────────────────────────────────────────────
+# 代理池配置
+# ───────────────────────────────────────────────────────────────
 pool:
+  # 调度模式: sequential（顺序）, random（随机）
   mode: sequential
+  # 连续失败多少次后加入黑名单
   failure_threshold: 3
+  # 黑名单持续时间
   blacklist_duration: 24h
+
+# ───────────────────────────────────────────────────────────────
+# 多端口模式配置（multi-port / hybrid 模式使用）
+# ───────────────────────────────────────────────────────────────
 multi_port:
-  address: 0.0.0.0
-  base_port: 24000
-  username: mpuser
-  password: mppass
+  address: 0.0.0.0      # 监听地址
+  base_port: 24000      # 起始端口号
+  username: mpuser      # 默认认证用户名
+  password: mppass      # 默认认证密码
+
+# ───────────────────────────────────────────────────────────────
+# 管理面板配置
+# ───────────────────────────────────────────────────────────────
+management:
+  enabled: true                                      # 是否启用管理面板
+  listen: 0.0.0.0:9090                               # 监听地址
+  probe_target: http://cp.cloudflare.com/generate_204  # 健康检查目标（可选 www.apple.com:80）
+  ip_info_source: ping0                              # IP 检测源：ping0(默认) / ippure / iplark / dkly，支持自动降级
+  api_token: ""                                      # API 认证 Token（Bearer），为空则启动时自动生成
+  password: ""                                       # WebUI 访问密码，为空则不需要密码
+  cors_origins:
+    - "*"                                            # 前后端分离时允许跨域来源，生产建议改为明确域名
+
+# SQLite 存储（节点、订阅、检测流水）
+storage:
+  type: sqlite
+  sqlite_path: ./data/easy_proxies.db
+
+# ───────────────────────────────────────────────────────────────
+# GeoIP 地域分区配置（可选）
+# ───────────────────────────────────────────────────────────────
+# 启用后，节点会按地域自动分组，可通过路径访问特定地域的代理池：
+#   http://127.0.0.1:2323/jp    - 日本节点
+#   http://127.0.0.1:2323/kr    - 韩国节点
+#   http://127.0.0.1:2323/us    - 美国节点
+#   http://127.0.0.1:2323/hk    - 香港节点
+#   http://127.0.0.1:2323/tw    - 台湾节点
+#   http://127.0.0.1:2323/sg    - 新加坡节点
+#   http://127.0.0.1:2323/other - 其他地域
+#   http://127.0.0.1:2323/      - 全部节点（默认）
+geoip:
+  enabled: false                                     # 是否启用 GeoIP 地域分区
+  database_path: "./GeoLite2-Country.mmdb"           # GeoIP 数据库路径（首次启动时自动下载）
+  auto_update_enabled: true                          # 是否启用自动更新数据库（推荐）
+  auto_update_interval: 24h                          # 自动更新间隔（默认 24 小时）
+  # listen: 0.0.0.0                                  # GeoIP 路由监听地址（默认使用 listener 配置）
+  # port: 2323                                       # GeoIP 路由监听端口（默认 2323）
+  # 注意：
+  #   - 首次启动会自动从 GitHub 下载 GeoIP 数据库（约 9MB）
+  #   - 启用 auto_update_enabled 后，数据库会定期自动更新，无需重启容器
+  #   - 更新过程采用热重载，不会中断现有连接
+
+# ───────────────────────────────────────────────────────────────
+# 订阅自动刷新配置（可选）
+# ───────────────────────────────────────────────────────────────
+# subscription_refresh:
+#   enabled: false              # 是否启用定时刷新
+#   interval: 1h                # 刷新间隔（默认 1 小时）
+#   timeout: 30s                # 获取订阅的超时时间
+#   health_check_timeout: 60s   # 新节点健康检查超时
+#   drain_timeout: 30s          # 旧实例排空超时时间
+#   min_available_nodes: 1      # 最少可用节点数，低于此值不切换
 
 # ═══════════════════════════════════════════════════════════════
 # 节点配置方式（三选一或混合使用）
 # ═══════════════════════════════════════════════════════════════
 
-# 方式 1: 使用 nodes_file（推荐，最简单）
-# 创建一个文本文件，每行一个代理 URI。
-nodes_file: nodes.txt
+# ───────────────────────────────────────────────────────────────
+# 方式 1: 订阅链接（推荐，自动获取并写入 SQLite）
+# ───────────────────────────────────────────────────────────────
+# subscriptions:
+#   - "https://example.com/subscribe?token=xxx"
+#   - "https://another.com/api/v1/client/subscribe?token=yyy"
 
-# 方式 2: 直接在配置文件中配置（传统方式）
-# 默认留空，首次启动也能安全进入 WebUI。
-# nodes:
-#   # 只需提供 URI，名称会自动从 #后面提取，端口自动分配
-#   - uri: "vless://uuid@server:443#节点名称"
-#   - uri: "ss://base64@server:8388#中文节点"
-#
-#   # 也可以手动指定名称和端口
-#   - name: tw-vless
-#     uri: "vless://uuid@server:443#节点名称"
-#     port: 24001
+# ───────────────────────────────────────────────────────────────
+# 方式 2: 节点文件（每行一个代理 URI，首次迁移到 SQLite 可用）
+# ───────────────────────────────────────────────────────────────
+# nodes_file: nodes.txt
+
+# ───────────────────────────────────────────────────────────────
+# 方式 3: 直接在配置文件中配置节点
+# ───────────────────────────────────────────────────────────────
+nodes:
+  # 最简配置：只需 URI，名称从 # 后自动提取
+  - uri: "vless://uuid@server:443?security=tls&type=ws&path=/path#节点名称"
+
+  # 也可以手动指定名称和端口
+  - name: tw-vless
+    uri: "vless://test"
+    port: 24001
+
+  # 完整配置：手动指定名称和端口
+  # - name: "自定义名称"
+  #   uri: "ss://base64@server:8388"
+  #   port: 24001              # 手动指定端口（multi-port/hybrid 模式）
+  #   username: "custom_user"  # 覆盖默认认证（可选）
+  #   password: "custom_pass"
+
+# ───────────────────────────────────────────────────────────────
+# 支持的代理协议
+# ───────────────────────────────────────────────────────────────
+# - VMess:    vmess://base64_encoded_json
+# - VLESS:    vless://uuid@server:port?params#name
+# - Trojan:   trojan://password@server:port?params#name
+# - SS:       ss://method:password@server:port#name
+#             ss://base64(method:password)@server:port#name
+# - SSR:      ssr://base64_encoded
+# - Hysteria2: hy2://password@server:port?params#name
+# - HTTP:     http://user:pass@server:port
+# - SOCKS5:   socks5://user:pass@server:port
 
 # 方式 3: 混合使用（两种方式的节点会合并）
 # nodes_file: nodes.txt

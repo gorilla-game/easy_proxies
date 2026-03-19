@@ -3,24 +3,35 @@ package monitor
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	mathrand "math/rand"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"easy_proxies/internal/config"
+	"golang.org/x/sync/semaphore"
 )
 
 //go:embed assets/index.html
 var embeddedFS embed.FS
+
+// Session represents a user session with expiration.
+type Session struct {
+	Token     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
 
 // NodeManager exposes config node CRUD and reload operations.
 type NodeManager interface {
@@ -28,14 +39,20 @@ type NodeManager interface {
 	CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error)
 	UpdateNode(ctx context.Context, name string, node config.NodeConfig) (config.NodeConfig, error)
 	DeleteNode(ctx context.Context, name string) error
+	DeleteAllNodes(ctx context.Context) error
+	AddSubscription(ctx context.Context, subURL string) error
+	DeleteSubscription(ctx context.Context, subURL string) error
 	TriggerReload(ctx context.Context) error
 }
 
 // Sentinel errors for node operations.
 var (
-	ErrNodeNotFound = errors.New("节点不存在")
-	ErrNodeConflict = errors.New("节点名称或端口已存在")
-	ErrInvalidNode  = errors.New("无效的节点配置")
+	ErrNodeNotFound         = errors.New("节点不存在")
+	ErrNodeConflict         = errors.New("节点名称或端口已存在")
+	ErrInvalidNode          = errors.New("无效的节点配置")
+	ErrSubscriptionNotFound = errors.New("订阅不存在")
+	ErrSubscriptionConflict = errors.New("订阅已存在")
+	ErrInvalidSubscription  = errors.New("无效的订阅地址")
 )
 
 // SubscriptionRefresher interface for subscription manager.
@@ -61,13 +78,27 @@ type SubscriptionStatus struct {
 
 // Server exposes HTTP endpoints for monitoring.
 type Server struct {
-	cfg          Config
-	cfgMu        sync.RWMutex   // 保护动态配置字段
-	cfgSrc       *config.Config // 可持久化的配置对象
-	mgr          *Manager
-	srv          *http.Server
-	logger       *log.Logger
-	sessionToken string // 简单的 session token，重启后失效
+	cfg    Config
+	cfgMu  sync.RWMutex   // 保护动态配置字段
+	cfgSrc *config.Config // 可持久化的配置对象
+	mgr    *Manager
+	srv    *http.Server
+	logger *log.Logger
+
+	// Session management
+	sessionMu  sync.RWMutex
+	sessions   map[string]*Session
+	sessionTTL time.Duration
+
+	// Extractor signed short links
+	extractorLinkMu  sync.RWMutex
+	extractorLinks   map[string]extractorShortLink
+	extractorLinkTTL time.Duration
+	extractorSecret  string
+
+	// Concurrency control
+	probeSem *semaphore.Weighted
+
 	subRefresher SubscriptionRefresher
 	nodeMgr      NodeManager
 }
@@ -80,12 +111,30 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	if logger == nil {
 		logger = log.Default()
 	}
-	s := &Server{cfg: cfg, mgr: mgr, logger: logger}
 
-	// 生成随机 session token
-	tokenBytes := make([]byte, 32)
-	rand.Read(tokenBytes)
-	s.sessionToken = hex.EncodeToString(tokenBytes)
+	// Calculate max concurrent probes
+	maxConcurrentProbes := int64(runtime.NumCPU() * 4)
+	if maxConcurrentProbes < 10 {
+		maxConcurrentProbes = 10
+	}
+
+	s := &Server{
+		cfg:              cfg,
+		mgr:              mgr,
+		logger:           logger,
+		sessions:         make(map[string]*Session),
+		sessionTTL:       24 * time.Hour,
+		extractorLinks:   make(map[string]extractorShortLink),
+		extractorLinkTTL: 24 * time.Hour,
+		extractorSecret:  newRandomHex(32),
+		probeSem:         semaphore.NewWeighted(maxConcurrentProbes),
+	}
+	if s.extractorSecret == "" {
+		s.extractorSecret = fmt.Sprintf("extractor-%d", time.Now().UnixNano())
+	}
+
+	// Start session cleanup goroutine
+	go s.cleanupExpiredSessions()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
@@ -94,18 +143,24 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/auth", s.handleAuth)
 	mux.HandleFunc("/api/settings", s.withAuth(s.handleSettings))
 	mux.HandleFunc("/api/nodes", s.withAuth(s.handleNodes))
+	mux.HandleFunc("/api/nodes/current", s.withAuth(s.handleCurrentNodes))
+	mux.HandleFunc("/api/nodes/events", s.withAuth(s.handleNodeEvents))
+	mux.HandleFunc("/api/extractor/options", s.withAuth(s.handleExtractorOptions))
+	mux.HandleFunc("/api/extractor/generate", s.withAuth(s.handleExtractorGenerate))
+	mux.HandleFunc("/api/extractor/link", s.withAuth(s.handleExtractorLink))
+	mux.HandleFunc("/api/extractor/fetch", s.handleExtractorFetch)
 	mux.HandleFunc("/api/nodes/config", s.withAuth(s.handleConfigNodes))
-	mux.HandleFunc("/api/nodes/config/batch-delete", s.withAuth(s.handleConfigNodeBatchDelete))
 	mux.HandleFunc("/api/nodes/config/", s.withAuth(s.handleConfigNodeItem))
 	mux.HandleFunc("/api/nodes/probe-all", s.withAuth(s.handleProbeAll))
 	mux.HandleFunc("/api/nodes/", s.withAuth(s.handleNodeAction))
+	mux.HandleFunc("/api/subscriptions", s.withAuth(s.handleSubscriptions))
 	mux.HandleFunc("/api/debug", s.withAuth(s.handleDebug))
 	mux.HandleFunc("/api/export/filter", s.withAuth(s.handleExportFilter))
 	mux.HandleFunc("/api/export", s.withAuth(s.handleExport))
 	mux.HandleFunc("/api/subscription/status", s.withAuth(s.handleSubscriptionStatus))
 	mux.HandleFunc("/api/subscription/refresh", s.withAuth(s.handleSubscriptionRefresh))
 	mux.HandleFunc("/api/reload", s.withAuth(s.handleReload))
-	s.srv = &http.Server{Addr: cfg.Listen, Handler: mux}
+	s.srv = &http.Server{Addr: cfg.Listen, Handler: s.withCORS(mux)}
 	return s
 }
 
@@ -136,6 +191,7 @@ func (s *Server) SetConfig(cfg *config.Config) {
 		s.cfg.ProbeTarget = cfg.Management.ProbeTarget
 		s.cfg.SkipCertVerify = cfg.SkipCertVerify
 		s.cfg.APIToken = cfg.Management.APIToken
+		s.cfg.CORSOrigins = append([]string(nil), cfg.Management.CORSOrigins...)
 	}
 }
 
@@ -245,8 +301,31 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	// 返回所有节点（包含未通过初始检查的节点）
-	payload := map[string]any{"nodes": s.mgr.SnapshotFiltered(false)}
+	// 只返回初始检查通过的可用节点，同时提供完整节点列表与地域统计
+	filtered := s.mgr.SnapshotFiltered(true)
+	allNodes := s.mgr.Snapshot()
+	totalNodes := len(allNodes)
+
+	regionStats := make(map[string]int)
+	regionHealthy := make(map[string]int)
+	for _, snap := range allNodes {
+		region := snap.Region
+		if region == "" {
+			region = "other"
+		}
+		regionStats[region]++
+		if snap.InitialCheckDone && snap.Available && !snap.Blacklisted {
+			regionHealthy[region]++
+		}
+	}
+
+	payload := map[string]any{
+		"nodes":          filtered,
+		"all_nodes":      allNodes,
+		"total_nodes":    totalNodes,
+		"region_stats":   regionStats,
+		"region_healthy": regionHealthy,
+	}
 	writeJSON(w, payload)
 }
 
@@ -290,6 +369,111 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		"success_rate":  successRate,
 		"probe_logs":    s.mgr.ProbeLogs(),
 	})
+}
+
+func (s *Server) handleSubscriptions(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := s.mgr.ListSubscriptionRecords(r.Context())
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			writeJSON(w, map[string]any{"error": err.Error()})
+			return
+		}
+		active := make([]any, 0, len(rows))
+		for _, row := range rows {
+			if row.EnabledUpdate {
+				active = append(active, row)
+			}
+		}
+		writeJSON(w, map[string]any{"subscriptions": active})
+	case http.MethodPost:
+		if !s.ensureNodeManager(w) {
+			return
+		}
+		var req struct {
+			SubscriptionURL string `json:"subscription_url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]any{"error": "请求格式错误"})
+			return
+		}
+		subURL := strings.TrimSpace(req.SubscriptionURL)
+		if subURL == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]any{"error": "订阅地址不能为空"})
+			return
+		}
+		if err := s.nodeMgr.AddSubscription(r.Context(), subURL); err != nil {
+			s.respondNodeError(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"message": "订阅已添加"})
+	case http.MethodDelete:
+		if !s.ensureNodeManager(w) {
+			return
+		}
+		subURL := strings.TrimSpace(r.URL.Query().Get("url"))
+		if subURL == "" {
+			var req struct {
+				SubscriptionURL string `json:"subscription_url"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				writeJSON(w, map[string]any{"error": "请求格式错误"})
+				return
+			}
+			subURL = strings.TrimSpace(req.SubscriptionURL)
+		}
+		if subURL == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]any{"error": "订阅地址不能为空"})
+			return
+		}
+		if err := s.nodeMgr.DeleteSubscription(r.Context(), subURL); err != nil {
+			s.respondNodeError(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"message": "订阅已删除"})
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleNodeEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 200
+	if v := strings.TrimSpace(r.URL.Query().Get("limit")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	ipPortKey := strings.TrimSpace(r.URL.Query().Get("ip_port_key"))
+	rows, err := s.mgr.ListNodeEvents(r.Context(), ipPortKey, limit)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"events": rows})
+}
+
+func (s *Server) handleCurrentNodes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	rows, err := s.mgr.ListCurrentNodes(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"nodes": rows})
 }
 
 func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
@@ -371,10 +555,10 @@ func (s *Server) handleProbeAll(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "data: %s\n\n", fmt.Sprintf(`{"type":"start","total":%d}`, total))
 	flusher.Flush()
 
-	const (
-		probeConcurrency   = 2
-		probeStartInterval = 200 * time.Millisecond
-	)
+	const probeStartInterval = 200 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
 
 	type probeResult struct {
 		snap      Snapshot
@@ -382,13 +566,10 @@ func (s *Server) handleProbeAll(w http.ResponseWriter, r *http.Request) {
 		err       error
 	}
 
-	ctx := r.Context()
-	results := make(chan probeResult, probeConcurrency)
-	sem := make(chan struct{}, probeConcurrency)
+	results := make(chan probeResult, total)
 	var wg sync.WaitGroup
 	var lastStart time.Time
 
-	// Probe all nodes with limited concurrency and start interval
 launchLoop:
 	for _, snap := range snapshots {
 		select {
@@ -408,31 +589,30 @@ launchLoop:
 			}
 		}
 
-		select {
-		case sem <- struct{}{}:
-		case <-ctx.Done():
-			break launchLoop
+		if err := s.probeSem.Acquire(ctx, 1); err != nil {
+			results <- probeResult{snap: snap, latencyMs: -1, err: err}
+			continue
 		}
 
 		lastStart = time.Now()
 		wg.Add(1)
 		go func(snap Snapshot) {
 			defer wg.Done()
-			defer func() { <-sem }()
+			defer s.probeSem.Release(1)
 
-			ctxProbe, cancel := context.WithTimeout(ctx, 10*time.Second)
-			latency, err := s.mgr.Probe(ctxProbe, snap.Tag)
-			cancel()
+			probeCtx, probeCancel := context.WithTimeout(ctx, 10*time.Second)
+			latency, err := s.mgr.Probe(probeCtx, snap.Tag)
+			probeCancel()
 
 			latencyMs := latency.Milliseconds()
 			if latencyMs == 0 && latency > 0 {
 				latencyMs = 1
 			}
-
-			select {
-			case results <- probeResult{snap: snap, latencyMs: latencyMs, err: err}:
-			case <-ctx.Done():
+			if err != nil {
+				latencyMs = -1
 			}
+
+			results <- probeResult{snap: snap, latencyMs: latencyMs, err: err}
 		}(snap)
 	}
 
@@ -443,26 +623,23 @@ launchLoop:
 
 	successCount := 0
 	failedCount := 0
+	count := 0
 
-	for res := range results {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
+	for result := range results {
+		count++
+		status := "success"
 		errMsg := ""
-		if res.err != nil {
+		if result.err != nil {
 			failedCount++
-			errMsg = res.err.Error()
+			status = "error"
+			errMsg = result.err.Error()
 		} else {
 			successCount++
 		}
 
-		current := successCount + failedCount
-		progress := float64(current) / float64(total) * 100
-		eventData := fmt.Sprintf(`{"type":"progress","tag":"%s","name":"%s","latency":%d,"error":"%s","current":%d,"total":%d,"progress":%.1f}`,
-			res.snap.Tag, res.snap.Name, res.latencyMs, errMsg, current, total, progress)
+		progress := float64(count) / float64(total) * 100
+		eventData := fmt.Sprintf(`{"type":"progress","tag":"%s","name":"%s","latency":%d,"status":"%s","error":"%s","current":%d,"total":%d,"progress":%.1f}`,
+			result.snap.Tag, result.snap.Name, result.latencyMs, status, errMsg, count, total, progress)
 		fmt.Fprintf(w, "data: %s\n\n", eventData)
 		flusher.Flush()
 	}
@@ -470,7 +647,7 @@ launchLoop:
 	if ctx.Err() != nil {
 		return
 	}
-	// Send complete event
+
 	fmt.Fprintf(w, "data: %s\n\n", fmt.Sprintf(`{"type":"complete","total":%d,"success":%d,"failed":%d}`, total, successCount, failedCount))
 	flusher.Flush()
 }
@@ -498,10 +675,11 @@ func (s *Server) isTokenValid(token string) bool {
 	if token == "" {
 		return false
 	}
-	if token == s.sessionToken {
+	if s.validateSession(token) {
 		return true
 	}
-	if strings.TrimSpace(s.cfg.APIToken) != "" && token == s.cfg.APIToken {
+	apiToken := strings.TrimSpace(s.cfg.APIToken)
+	if apiToken != "" && token == apiToken {
 		return true
 	}
 	return false
@@ -526,7 +704,7 @@ func (s *Server) isAuthorized(r *http.Request) bool {
 	return false
 }
 
-func (s *Server) setTokenCookie(w http.ResponseWriter, token string) {
+func (s *Server) setTokenCookie(w http.ResponseWriter, token string, maxAge int) {
 	if token == "" {
 		return
 	}
@@ -535,8 +713,9 @@ func (s *Server) setTokenCookie(w http.ResponseWriter, token string) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   false, // 生产环境应启用 HTTPS 并设为 true
 		SameSite: http.SameSiteStrictMode,
-		MaxAge:   86400 * 7, // 7天
+		MaxAge:   maxAge,
 	})
 }
 
@@ -544,11 +723,52 @@ func (s *Server) maybeSetTokenCookie(w http.ResponseWriter) {
 	if s.cfg.Password != "" {
 		return
 	}
-	token := strings.TrimSpace(s.cfg.APIToken)
-	if token == "" {
-		token = s.sessionToken
+	apiToken := strings.TrimSpace(s.cfg.APIToken)
+	if apiToken == "" {
+		return
 	}
-	s.setTokenCookie(w, token)
+	s.setTokenCookie(w, apiToken, 86400*7)
+}
+
+func (s *Server) withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		allowValue, ok := s.corsAllowOrigin(origin)
+		if ok {
+			w.Header().Set("Access-Control-Allow-Origin", allowValue)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Max-Age", "600")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) corsAllowOrigin(origin string) (string, bool) {
+	if strings.TrimSpace(origin) == "" {
+		return "", false
+	}
+	s.cfgMu.RLock()
+	origins := append([]string(nil), s.cfg.CORSOrigins...)
+	s.cfgMu.RUnlock()
+	if len(origins) == 0 {
+		return "", false
+	}
+	for _, allowed := range origins {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == "*" {
+			return "*", true
+		}
+		if strings.EqualFold(allowed, origin) {
+			return origin, true
+		}
+	}
+	return "", false
 }
 
 // withAuth 认证中间件，如果配置了密码或 token 则需要验证
@@ -565,7 +785,6 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// 未授权
 		w.WriteHeader(http.StatusUnauthorized)
 		writeJSON(w, map[string]any{"error": "未授权，请先登录"})
 	}
@@ -574,13 +793,12 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 // handleAuth 处理登录认证
 func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request) {
 	apiToken := strings.TrimSpace(s.cfg.APIToken)
-	if apiToken == "" {
-		apiToken = s.sessionToken
-	}
 
 	if r.Method == http.MethodGet {
 		if s.cfg.Password == "" {
-			s.setTokenCookie(w, apiToken)
+			if apiToken != "" {
+				s.setTokenCookie(w, apiToken, 86400*7)
+			}
 			writeJSON(w, map[string]any{
 				"message":     "无需密码",
 				"no_password": true,
@@ -590,9 +808,22 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if s.isAuthorized(r) {
+			token := ""
+			if cookie, err := r.Cookie("session_token"); err == nil && s.isTokenValid(cookie.Value) {
+				token = cookie.Value
+			}
+			if token == "" {
+				authHeader := r.Header.Get("Authorization")
+				if strings.HasPrefix(authHeader, "Bearer ") {
+					candidate := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+					if s.isTokenValid(candidate) {
+						token = candidate
+					}
+				}
+			}
 			writeJSON(w, map[string]any{
 				"message":   "已登录",
-				"token":     s.sessionToken,
+				"token":     token,
 				"api_token": apiToken,
 			})
 			return
@@ -608,7 +839,9 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.cfg.Password == "" {
-		s.setTokenCookie(w, apiToken)
+		if apiToken != "" {
+			s.setTokenCookie(w, apiToken, 86400*7)
+		}
 		writeJSON(w, map[string]any{
 			"message":     "无需密码",
 			"no_password": true,
@@ -628,19 +861,28 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 验证密码
-	if req.Password != s.cfg.Password {
+	// 使用 constant-time 比较防止时序攻击
+	if !secureCompareStrings(req.Password, s.cfg.Password) {
+		// 添加随机延迟防止暴力破解
+		time.Sleep(time.Duration(100+mathrand.Intn(200)) * time.Millisecond)
 		w.WriteHeader(http.StatusUnauthorized)
 		writeJSON(w, map[string]any{"error": "密码错误"})
 		return
 	}
 
-	// 设置 cookie
-	s.setTokenCookie(w, s.sessionToken)
+	session, err := s.createSession()
+	if err != nil {
+		s.logger.Printf("Failed to create session: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]any{"error": "服务器错误"})
+		return
+	}
+
+	s.setTokenCookie(w, session.Token, int(s.sessionTTL.Seconds()))
 
 	writeJSON(w, map[string]any{
 		"message":   "登录成功",
-		"token":     s.sessionToken,
+		"token":     session.Token,
 		"api_token": apiToken,
 	})
 }
@@ -1018,10 +1260,6 @@ type nodePayload struct {
 	Password string `json:"password"`
 }
 
-type batchNamesPayload struct {
-	Names []string `json:"names"`
-}
-
 func (p nodePayload) toConfig() config.NodeConfig {
 	return config.NodeConfig{
 		Name:     p.Name,
@@ -1030,26 +1268,6 @@ func (p nodePayload) toConfig() config.NodeConfig {
 		Username: p.Username,
 		Password: p.Password,
 	}
-}
-
-func (p batchNamesPayload) normalizedNames() []string {
-	if len(p.Names) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(p.Names))
-	seen := make(map[string]struct{}, len(p.Names))
-	for _, name := range p.Names {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-		out = append(out, name)
-	}
-	return out
 }
 
 // handleConfigNodes handles GET (list) and POST (create) for config nodes.
@@ -1079,54 +1297,15 @@ func (s *Server) handleConfigNodes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]any{"node": node, "message": "节点已添加，请点击重载使配置生效"})
+	case http.MethodDelete:
+		if err := s.nodeMgr.DeleteAllNodes(r.Context()); err != nil {
+			s.respondNodeError(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"message": "所有节点已删除，请点击重载使配置生效"})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
-}
-
-// handleConfigNodeBatchDelete handles POST for deleting multiple config nodes.
-func (s *Server) handleConfigNodeBatchDelete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	if !s.ensureNodeManager(w) {
-		return
-	}
-
-	var payload batchNamesPayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		writeJSON(w, map[string]any{"error": "请求格式错误"})
-		return
-	}
-
-	names := payload.normalizedNames()
-	if len(names) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		writeJSON(w, map[string]any{"error": "至少提供一个有效节点名称"})
-		return
-	}
-
-	errorsList := make([]string, 0)
-	success := 0
-	for _, name := range names {
-		if err := s.nodeMgr.DeleteNode(r.Context(), name); err != nil {
-			errorsList = append(errorsList, fmt.Sprintf("%s: %v", name, err))
-			continue
-		}
-		success++
-	}
-
-	resp := map[string]any{
-		"message": "批量删除完成，请点击重载使配置生效",
-		"success": success,
-		"total":   len(names),
-	}
-	if len(errorsList) > 0 {
-		resp["errors"] = errorsList
-	}
-	writeJSON(w, resp)
 }
 
 // handleConfigNodeItem handles PUT (update) and DELETE for a specific config node.
@@ -1201,9 +1380,108 @@ func (s *Server) respondNodeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrNodeNotFound):
 		status = http.StatusNotFound
-	case errors.Is(err, ErrNodeConflict), errors.Is(err, ErrInvalidNode):
+	case errors.Is(err, ErrSubscriptionNotFound):
+		status = http.StatusNotFound
+	case errors.Is(err, ErrNodeConflict), errors.Is(err, ErrInvalidNode), errors.Is(err, ErrSubscriptionConflict), errors.Is(err, ErrInvalidSubscription):
 		status = http.StatusBadRequest
 	}
 	w.WriteHeader(status)
 	writeJSON(w, map[string]any{"error": err.Error()})
+}
+
+// Session management functions
+
+// generateSessionToken creates a cryptographically secure random token.
+func (s *Server) generateSessionToken() (string, error) {
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", fmt.Errorf("failed to generate session token: %w", err)
+	}
+	return hex.EncodeToString(tokenBytes), nil
+}
+
+// createSession creates a new session with expiration.
+func (s *Server) createSession() (*Session, error) {
+	token, err := s.generateSessionToken()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	session := &Session{
+		Token:     token,
+		CreatedAt: now,
+		ExpiresAt: now.Add(s.sessionTTL),
+	}
+
+	s.sessionMu.Lock()
+	s.sessions[token] = session
+	s.sessionMu.Unlock()
+
+	return session, nil
+}
+
+// validateSession checks if a session token is valid and not expired.
+func (s *Server) validateSession(token string) bool {
+	s.sessionMu.RLock()
+	session, exists := s.sessions[token]
+	s.sessionMu.RUnlock()
+
+	if !exists {
+		return false
+	}
+
+	// Check if expired
+	if time.Now().After(session.ExpiresAt) {
+		s.sessionMu.Lock()
+		delete(s.sessions, token)
+		s.sessionMu.Unlock()
+		return false
+	}
+
+	return true
+}
+
+// cleanupExpiredSessions periodically removes expired sessions.
+func (s *Server) cleanupExpiredSessions() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		s.sessionMu.Lock()
+		for token, session := range s.sessions {
+			if now.After(session.ExpiresAt) {
+				delete(s.sessions, token)
+			}
+		}
+		s.sessionMu.Unlock()
+		s.cleanupExpiredExtractorLinks(now)
+	}
+}
+
+func newRandomHex(size int) string {
+	if size <= 0 {
+		return ""
+	}
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(buf)
+}
+
+// secureCompareStrings performs constant-time string comparison to prevent timing attacks.
+func secureCompareStrings(a, b string) bool {
+	aBytes := []byte(a)
+	bBytes := []byte(b)
+
+	// If lengths differ, still perform a dummy comparison to maintain constant time
+	if len(aBytes) != len(bBytes) {
+		dummy := make([]byte, 32)
+		subtle.ConstantTimeCompare(dummy, dummy)
+		return false
+	}
+
+	return subtle.ConstantTimeCompare(aBytes, bBytes) == 1
 }

@@ -16,6 +16,7 @@ import (
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/monitor"
 	"easy_proxies/internal/outbound/pool"
+	"easy_proxies/internal/storage"
 
 	"github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/include"
@@ -47,6 +48,11 @@ func WithLogger(l Logger) Option {
 	return func(m *Manager) { m.logger = l }
 }
 
+// WithNodeStore sets sqlite store for node persistence sync.
+func WithNodeStore(store *storage.Store) Option {
+	return func(m *Manager) { m.store = store }
+}
+
 // Manager owns the lifecycle of the active sing-box instance.
 type Manager struct {
 	mu sync.RWMutex
@@ -63,6 +69,18 @@ type Manager struct {
 
 	baseCtx            context.Context
 	healthCheckStarted bool
+	store              *storage.Store
+}
+
+func (m *Manager) replaceConfigLocked(newCfg *config.Config) {
+	if newCfg == nil {
+		return
+	}
+	if m.cfg == nil {
+		m.cfg = newCfg
+		return
+	}
+	*m.cfg = *newCfg
 }
 
 // New creates a BoxManager with the given config.
@@ -121,9 +139,10 @@ func (m *Manager) startWithConfig(ctx context.Context, cfg *config.Config) error
 
 	if len(cfg.Nodes) == 0 {
 		m.mu.Lock()
-		m.cfg = cfg
+		m.replaceConfigLocked(cfg)
 		m.baseCtx = ctx
 		m.mu.Unlock()
+		m.syncStoreWithConfig(m.cfg)
 		m.logger.Warnf("no nodes loaded yet; monitor server started, waiting for subscription refresh")
 		return nil
 	}
@@ -157,8 +176,10 @@ func (m *Manager) startWithConfig(ctx context.Context, cfg *config.Config) error
 
 	m.mu.Lock()
 	m.currentBox = instance
-	m.cfg = cfg
+	m.replaceConfigLocked(cfg)
+	cfgRef := m.cfg
 	m.mu.Unlock()
+	m.syncStoreWithConfig(cfgRef)
 
 	// Start periodic health check after nodes are registered
 	m.mu.Lock()
@@ -252,8 +273,10 @@ func (m *Manager) Reload(newCfg *config.Config) error {
 
 	m.mu.Lock()
 	m.currentBox = instance
-	m.cfg = newCfg
+	m.replaceConfigLocked(newCfg)
+	cfgRef := m.cfg
 	m.mu.Unlock()
+	m.syncStoreWithConfig(cfgRef)
 
 	m.logger.Infof("reload completed successfully with %d nodes", len(newCfg.Nodes))
 	return nil
@@ -559,6 +582,7 @@ func (m *Manager) CreateNode(ctx context.Context, node config.NodeConfig) (confi
 		m.cfg.Nodes = m.cfg.Nodes[:len(m.cfg.Nodes)-1]
 		return config.NodeConfig{}, fmt.Errorf("save config: %w", err)
 	}
+	m.syncStoreWithConfig(m.cfg)
 	return normalized, nil
 }
 
@@ -597,6 +621,7 @@ func (m *Manager) UpdateNode(ctx context.Context, name string, node config.NodeC
 		m.cfg.Nodes[idx] = prev
 		return config.NodeConfig{}, fmt.Errorf("save config: %w", err)
 	}
+	m.syncStoreWithConfig(m.cfg)
 	return normalized, nil
 }
 
@@ -627,6 +652,116 @@ func (m *Manager) DeleteNode(ctx context.Context, name string) error {
 		m.cfg.Nodes = backup
 		return fmt.Errorf("save config: %w", err)
 	}
+	m.syncStoreWithConfig(m.cfg)
+	return nil
+}
+
+// DeleteAllNodes clears all config nodes and saves the config.
+func (m *Manager) DeleteAllNodes(ctx context.Context) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.cfg == nil {
+		return errConfigUnavailable
+	}
+
+	backup := cloneNodes(m.cfg.Nodes)
+	m.cfg.Nodes = nil
+	if err := m.cfg.Save(); err != nil {
+		m.cfg.Nodes = backup
+		return fmt.Errorf("save config: %w", err)
+	}
+	m.syncStoreWithConfig(m.cfg)
+	return nil
+}
+
+// AddSubscription appends a subscription URL into config and persists it.
+func (m *Manager) AddSubscription(ctx context.Context, subURL string) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+
+	subURL = strings.TrimSpace(subURL)
+	if subURL == "" {
+		return monitor.ErrInvalidSubscription
+	}
+	parsed, err := url.ParseRequestURI(subURL)
+	if err != nil || parsed.Host == "" {
+		return monitor.ErrInvalidSubscription
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return monitor.ErrInvalidSubscription
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.cfg == nil {
+		return errConfigUnavailable
+	}
+
+	for _, existing := range m.cfg.Subscriptions {
+		if strings.EqualFold(strings.TrimSpace(existing), subURL) {
+			return monitor.ErrSubscriptionConflict
+		}
+	}
+
+	backup := append([]string(nil), m.cfg.Subscriptions...)
+	m.cfg.Subscriptions = append(m.cfg.Subscriptions, subURL)
+	if err := m.cfg.SaveSubscriptions(); err != nil {
+		m.cfg.Subscriptions = backup
+		return fmt.Errorf("save config: %w", err)
+	}
+	m.syncSubscriptionsWithConfig(m.cfg)
+	return nil
+}
+
+// DeleteSubscription removes a subscription URL from config and persists it.
+func (m *Manager) DeleteSubscription(ctx context.Context, subURL string) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+
+	subURL = strings.TrimSpace(subURL)
+	if subURL == "" {
+		return monitor.ErrInvalidSubscription
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.cfg == nil {
+		return errConfigUnavailable
+	}
+
+	idx := -1
+	for i, existing := range m.cfg.Subscriptions {
+		if strings.TrimSpace(existing) == subURL {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return monitor.ErrSubscriptionNotFound
+	}
+
+	backup := append([]string(nil), m.cfg.Subscriptions...)
+	m.cfg.Subscriptions = append(m.cfg.Subscriptions[:idx], m.cfg.Subscriptions[idx+1:]...)
+	if err := m.cfg.SaveSubscriptions(); err != nil {
+		m.cfg.Subscriptions = backup
+		return fmt.Errorf("save config: %w", err)
+	}
+	m.syncSubscriptionsWithConfig(m.cfg)
 	return nil
 }
 
@@ -681,6 +816,80 @@ func (m *Manager) CurrentPortMap() map[string]uint16 {
 		return nil
 	}
 	return m.cfg.BuildPortMap()
+}
+
+func (m *Manager) syncStoreWithConfig(cfg *config.Config) {
+	if m == nil || m.store == nil || cfg == nil {
+		return
+	}
+	now := time.Now().UTC()
+	rows := make([]storage.CurrentNode, 0, len(cfg.Nodes))
+	for _, node := range cfg.Nodes {
+		uri := strings.TrimSpace(node.URI)
+		if uri == "" {
+			continue
+		}
+		source := strings.ToLower(strings.TrimSpace(string(node.Source)))
+		if source == "" {
+			source = string(config.NodeSourceSubscription)
+		}
+		rows = append(rows, storage.CurrentNode{
+			Name:          strings.TrimSpace(node.Name),
+			URI:           uri,
+			Source:        source,
+			ListenPort:    node.Port,
+			Username:      strings.TrimSpace(node.Username),
+			Password:      strings.TrimSpace(node.Password),
+			LatencyMs:     -1,
+			HealthScore:   -1,
+			Availability:  -1,
+			Active:        true,
+			FirstSeenAt:   now,
+			LastSeenAt:    now,
+			LastUpdatedAt: now,
+			LastCheckAt:   now,
+		})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := m.store.ReplaceAllCurrentNodes(ctx, rows); err != nil {
+		m.logger.Warnf("failed to sync nodes to sqlite: %v", err)
+	}
+}
+
+func (m *Manager) syncSubscriptionsWithConfig(cfg *config.Config) {
+	if m == nil || m.store == nil || cfg == nil {
+		return
+	}
+	interval := int64(cfg.SubscriptionRefresh.Interval / time.Second)
+	if interval < 0 {
+		interval = 0
+	}
+
+	records := make([]storage.SubscriptionRecord, 0, len(cfg.Subscriptions))
+	for idx, subURL := range cfg.Subscriptions {
+		subURL = strings.TrimSpace(subURL)
+		if subURL == "" {
+			continue
+		}
+		records = append(records, storage.SubscriptionRecord{
+			Name:             fmt.Sprintf("subscription-%d", idx+1),
+			SubscriptionURL:  subURL,
+			EnabledUpdate:    true,
+			IntervalSeconds:  interval,
+			Collector:        "http",
+			Parser:           "auto",
+			Normalized:       true,
+			UnifiedStructure: true,
+			Deduped:          true,
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := m.store.UpsertSubscriptions(ctx, records); err != nil {
+		m.logger.Warnf("failed to sync subscriptions to sqlite: %v", err)
+	}
 }
 
 // --- Helper functions ---
